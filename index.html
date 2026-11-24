@@ -1,0 +1,3077 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AetherBeat — Liquid Glass Audio-Reactive Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ==========================================================================
+           LIQUID GLASS 2.5 OPTICAL DESIGN SYSTEM (STATIC BACKDROP • ZERO BLUR)
+           Pure WebGL Snell Refraction FBO + Audio-Reactive Meniscus & Specular Rim
+           ========================================================================== */
+        :root {
+            --accent: #ef1a2d;
+            --accent-glow: rgba(239, 26, 45, 0.55);
+            --accent-soft: rgba(239, 26, 45, 0.22);
+            --lg-rim-highlight: rgba(255, 255, 255, 0.92);
+            --lg-rim-sub: rgba(255, 255, 255, 0.22);
+            --lg-tint-surface: rgba(9, 13, 21, 0.42);
+            --lg-tint-control: rgba(255, 255, 255, 0.10);
+            --lg-shadow-drop: 0 24px 50px -14px rgba(0, 0, 0, 0.72);
+            --border-glass: rgba(235, 244, 255, 0.24);
+            --text-primary: #f8fafc;
+            --text-secondary: rgba(226, 232, 240, 0.78);
+            --text-muted: rgba(203, 213, 225, 0.55);
+            --lg-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            --lg-glide: cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        body.theme-light {
+            --lg-tint-surface: rgba(242, 247, 255, 0.54);
+            --lg-tint-control: rgba(255, 255, 255, 0.56);
+            --lg-rim-highlight: rgba(255, 255, 255, 0.98);
+            --lg-shadow-drop: 0 24px 48px -14px rgba(15, 23, 42, 0.22);
+            --border-glass: rgba(30, 58, 100, 0.22);
+            --text-primary: #0a1220;
+            --text-secondary: rgba(15, 28, 48, 0.80);
+            --text-muted: rgba(30, 48, 76, 0.60);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            min-height: 100%;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #05070c;
+            color: var(--text-primary);
+            overflow-x: hidden;
+            transition: color 0.3s ease, background-color 0.35s ease;
+        }
+
+        body.theme-light {
+            background-color: #dde6f2;
+        }
+
+        .font-mono-hud {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Fullscreen WebGL Static Backdrop + Real-Time Snell Lens Refraction Canvas */
+        #optical-canvas {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+            display: block;
+        }
+
+        /* Bottom Edge Audio-Reactive Dual-Wave Canvas (White left / Accent right) */
+        #bottom-wave-canvas {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100vw;
+            height: 135px;
+            z-index: 4;
+            pointer-events: none;
+            display: block;
+        }
+
+        /* ==========================================================================
+           LIQUID GLASS SURFACES & TACTILE CONTROLS (ZERO BACKDROP-FILTER BLUR)
+           ========================================================================== */
+        .liquid-surface,
+        .liquid-control {
+            transition:
+                transform 0.36s var(--lg-spring),
+                background-color 0.22s var(--lg-glide),
+                box-shadow 0.2s ease,
+                border-color 0.2s ease;
+            will-change: transform;
+            isolation: isolate;
+        }
+
+        .liquid-surface:not(.fixed):not(.absolute),
+        .liquid-control:not(.fixed):not(.absolute) {
+            position: relative;
+        }
+
+        .liquid-surface {
+            overflow: hidden;
+            border: 1px solid var(--border-glass);
+            background:
+                linear-gradient(145deg, rgba(255,255,255,0.14) 0%, rgba(210,230,255,0.04) 24%, rgba(6,10,18,0.22) 70%, rgba(255,255,255,0.06) 100%),
+                var(--lg-tint-surface);
+            box-shadow:
+                var(--lg-shadow-drop),
+                inset 0 1.5px 1.6px 0 var(--lg-rim-highlight),
+                inset 0 -1.5px 1.4px 0 var(--lg-rim-sub),
+                inset 0 0 22px rgba(255, 255, 255, 0.07);
+        }
+
+        .liquid-surface::before {
+            content: "";
+            position: absolute;
+            inset: 1px;
+            z-index: 0;
+            pointer-events: none;
+            border-radius: inherit;
+            background:
+                linear-gradient(118deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.05) 12%, transparent 34%, transparent 74%, rgba(255,255,255,0.08) 100%),
+                radial-gradient(ellipse at 14% 0%, rgba(255,255,255,0.14), transparent 46%);
+            opacity: 0.82;
+        }
+
+        .liquid-surface > :not(.absolute):not(.fixed) {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* GPU-composited beat flash rims (zero layout/paint thrashing!) */
+        .stage-beat-rim {
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            pointer-events: none;
+            z-index: 3;
+            opacity: 0;
+            border: 1.5px solid var(--accent);
+            box-shadow:
+                inset 0 0 38px var(--accent-soft),
+                inset 0 2px 3px rgba(255, 255, 255, 0.95),
+                0 0 42px var(--accent-glow);
+            will-change: opacity;
+        }
+
+        .cover-beat-rim {
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            pointer-events: none;
+            z-index: 18;
+            opacity: 0;
+            border: 2.5px solid var(--accent);
+            box-shadow:
+                inset 0 0 36px var(--accent-glow),
+                inset 0 0 14px rgba(255, 255, 255, 0.85);
+            will-change: opacity;
+        }
+
+        #main-player-stage {
+            transform-origin: center center;
+            will-change: transform;
+        }
+
+        .liquid-control {
+            border: 1px solid rgba(235, 245, 255, 0.28);
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(210,230,255,0.08) 38%, rgba(8,14,24,0.18) 100%),
+                var(--lg-tint-control);
+            box-shadow:
+                0 8px 20px rgba(0, 0, 0, 0.22),
+                inset 0 1.4px 1px rgba(255, 255, 255, 0.78),
+                inset 0 -1px 1px rgba(200, 225, 255, 0.20),
+                inset 0 0 14px rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            user-select: none;
+            color: inherit;
+        }
+
+        .liquid-control:hover {
+            transform: translateY(-2px) scale(1.03);
+            border-color: rgba(255, 255, 255, 0.52);
+            box-shadow:
+                0 12px 26px -6px rgba(0, 0, 0, 0.45),
+                0 0 18px var(--accent-soft),
+                inset 0 1.8px 1.6px rgba(255, 255, 255, 0.96),
+                inset 0 -1.2px 1px rgba(255, 255, 255, 0.35);
+        }
+
+        .liquid-control:active {
+            transform: translateY(1px) scale(0.96);
+            transition-duration: 0.08s;
+        }
+
+        .liquid-control.is-active {
+            border-color: var(--accent);
+            box-shadow:
+                0 10px 26px -6px var(--accent-glow),
+                inset 0 1.8px 1.5px rgba(255, 255, 255, 0.98),
+                inset 0 0 20px var(--accent-soft);
+        }
+
+        body.theme-light .liquid-control {
+            border-color: rgba(20, 48, 88, 0.24);
+            background: linear-gradient(180deg, rgba(255,255,255,0.78), rgba(220,235,252,0.45));
+        }
+
+        /* ==========================================================================
+           HERO ALBUM COVER FRAME & AUDIO-REACTIVE KINETICS
+           ========================================================================== */
+        .cover-stage-wrapper {
+            position: relative;
+            width: min(350px, 78vw);
+            height: min(350px, 78vw);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        @media (min-width: 1024px) {
+            .cover-stage-wrapper {
+                width: min(410px, 34vw);
+                height: min(410px, 34vw);
+            }
+        }
+
+        /* Ornate Rotating Sacred Geometry Ring Canvas Behind Cover */
+        #ring-canvas {
+            position: absolute;
+            width: 146%;
+            height: 146%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Square Liquid Glass Album Cover Container (Matches Reference Image Frame) */
+        .cover-glass-frame {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            height: 100%;
+            border-radius: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.88);
+            overflow: hidden;
+            will-change: transform;
+            box-shadow:
+                0 26px 64px rgba(0, 0, 0, 0.78),
+                0 0 28px var(--accent-soft),
+                inset 0 2px 2px rgba(255, 255, 255, 0.95),
+                inset 0 -2px 2px rgba(255, 255, 255, 0.35);
+            transition: border-color 0.25s ease;
+        }
+
+        .cover-glass-frame.is-dragover {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-glow), 0 24px 60px rgba(0, 0, 0, 0.85);
+        }
+
+        /* Specular glass sheen gliding over the cover */
+        .cover-glass-sheen {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 4;
+            background:
+                linear-gradient(128deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.03) 26%, transparent 52%, rgba(255,255,255,0.09) 100%);
+            opacity: 0.84;
+            will-change: opacity;
+        }
+
+        /* ==========================================================================
+           TYPOGRAPHY, DUAL-TONE TITLE & HUD SIGNATURE
+           ========================================================================== */
+        .track-title-display {
+            line-height: 1.05;
+            letter-spacing: -0.03em;
+            transform-origin: left center;
+            will-change: transform;
+            text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55);
+            transition: opacity 0.2s ease;
+        }
+
+        .title-accent-part {
+            color: var(--accent);
+            text-shadow:
+                0 0 22px var(--accent-glow),
+                0 2px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Progress Track */
+        .progress-track {
+            position: relative;
+            height: 14px;
+            border-radius: 6px;
+            border: 1.5px solid rgba(255, 255, 255, 0.82);
+            background: rgba(10, 14, 24, 0.45);
+            overflow: hidden;
+            cursor: pointer;
+            box-shadow:
+                0 8px 24px rgba(0, 0, 0, 0.35),
+                inset 0 1px 2px rgba(255, 255, 255, 0.45);
+        }
+
+        body.theme-light .progress-track {
+            border-color: rgba(15, 23, 42, 0.72);
+            background: rgba(255, 255, 255, 0.42);
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 100%;
+            transform-origin: left center;
+            transform: scaleX(0);
+            will-change: transform;
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0.92), #ffffff);
+            box-shadow: 0 0 16px rgba(255, 255, 255, 0.75);
+        }
+
+        body.theme-light .progress-fill {
+            background: linear-gradient(90deg, var(--accent), #111827);
+        }
+
+        /* Hanging Equalizer Spectrum Canvas */
+        #spectrum-canvas {
+            width: 100%;
+            height: 144px;
+            display: block;
+            pointer-events: none;
+        }
+
+        /* Artist / Channel Signature HUD Line (Bottom-Right like "Yukii Music") */
+        .channel-hud-line {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 6px;
+        }
+        .channel-hud-line::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: -18px;
+            bottom: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.95), var(--accent));
+            box-shadow: 0 0 14px var(--accent-glow);
+        }
+        body.theme-light .channel-hud-line::after {
+            background: linear-gradient(90deg, #0f172a, var(--accent));
+        }
+
+        /* Transport Play/Pause Glow */
+        .transport-btn-main {
+            width: 64px;
+            height: 64px;
+            will-change: transform;
+        }
+
+        /* Slide-over Studio Settings Drawer */
+        #studio-drawer-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            background: rgba(3, 6, 12, 0.42);
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+        }
+        #studio-drawer-backdrop.is-open {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        #studio-drawer {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            bottom: 16px;
+            width: min(410px, calc(100vw - 32px));
+            z-index: 70;
+            border-radius: 28px;
+            padding: 20px;
+            transform: translate3d(calc(100% + 28px), 0, 0);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: transform 0.38s var(--lg-glide), opacity 0.24s ease, visibility 0s linear 0.38s;
+        }
+        #studio-drawer.is-open {
+            transform: translate3d(0, 0, 0);
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transition: transform 0.38s var(--lg-glide), opacity 0.24s ease, visibility 0s;
+        }
+
+        /* Clean Presentation Mode */
+        body.presentation-mode #top-hud-bar {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(-16px);
+        }
+        #top-hud-bar {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        /* Beat Step Dots */
+        .beat-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.22);
+            transition: transform 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
+        }
+        body.theme-light .beat-dot {
+            background: rgba(15, 23, 42, 0.20);
+        }
+        .beat-dot.is-lit {
+            background: var(--accent);
+            transform: scale(1.45);
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+
+        /* Custom Sliders */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.20);
+            height: 5px;
+            border-radius: 999px;
+            outline: none;
+        }
+        body.theme-light input[type="range"] {
+            background: rgba(15, 23, 42, 0.20);
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 2px solid var(--accent);
+            box-shadow: 0 0 10px var(--accent-glow);
+            cursor: pointer;
+        }
+
+        /* Glass Input Field */
+        .glass-input {
+            background: rgba(8, 12, 22, 0.38);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            color: var(--text-primary);
+            border-radius: 14px;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            outline: none;
+            width: 100%;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .glass-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
+        }
+        body.theme-light .glass-input {
+            background: rgba(255, 255, 255, 0.65);
+            border-color: rgba(15, 23, 42, 0.22);
+        }
+
+        /* Inline editable hint */
+        .inline-editable {
+            cursor: text;
+            border-radius: 10px;
+            transition: background-color 0.2s ease;
+        }
+        .inline-editable:hover {
+            background-color: rgba(255, 255, 255, 0.06);
+        }
+
+        /* Subtle Toast */
+        .liquid-toast {
+            background: linear-gradient(135deg, rgba(255,255,255,0.22), rgba(14,20,32,0.72) 50%, rgba(8,12,20,0.85));
+            border: 1px solid rgba(255, 255, 255, 0.42);
+            box-shadow: 0 18px 42px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.85);
+            color: #ffffff;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.28); border-radius: 999px; }
+    </style>
+</head>
+<body class="antialiased selection:bg-rose-500/30">
+
+    <!-- WebGL Static Backdrop + Real-Time Liquid Glass Snell Refraction Engine -->
+    <canvas id="optical-canvas"></canvas>
+
+    <!-- Bottom Edge Dual-Wave Audio Energy Canvas (White Left / Crimson Right) -->
+    <canvas id="bottom-wave-canvas"></canvas>
+
+    <!-- Hidden Audio Element for Uploaded Music Files -->
+    <audio id="audio-element" crossorigin="anonymous" preload="metadata"></audio>
+
+    <!-- Hidden File Inputs -->
+    <input type="file" id="cover-file-input" accept="image/*" class="hidden">
+    <input type="file" id="audio-file-input" accept="audio/*" class="hidden">
+
+    <!-- Main Interactive Shell -->
+    <div class="relative z-10 min-h-screen flex flex-col justify-between px-4 py-4 sm:px-8 sm:py-6 max-w-[1440px] mx-auto gap-6 pb-20">
+
+        <!-- Top Floating Liquid Glass Toolbar -->
+        <header id="top-hud-bar" class="liquid-surface rounded-[26px] px-4 py-2.5 sm:px-5 flex flex-wrap items-center justify-between gap-3">
+            <!-- Left: Brand + Real-time Audio Telemetry Pill -->
+            <div class="flex items-center gap-3 flex-wrap">
+                <div class="flex items-center gap-2.5">
+                    <div id="live-pulse-orb" class="w-3 h-3 rounded-full bg-rose-500 shadow-[0_0_12px_#ef1a2d] transition-transform duration-75"></div>
+                    <span class="text-xs sm:text-sm font-extrabold tracking-tight uppercase">AetherBeat</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/20 bg-white/10 uppercase tracking-wider opacity-85">Static Glass</span>
+                </div>
+
+                <!-- Real-Time BPM / Beat / Dynamic IOR Telemetry -->
+                <div class="hidden md:flex items-center gap-3 pl-3 border-l border-white/15 font-mono-hud text-[11px]">
+                    <div class="flex items-center gap-1.5" title="Nhịp độ lắng nghe thời gian thực (BPM)">
+                        <span class="opacity-60">BPM</span>
+                        <span id="hud-bpm" class="font-extrabold text-sm">---</span>
+                    </div>
+                    <div class="flex items-center gap-1.5" id="beat-dots" title="Nhịp đập theo bar (4/4)">
+                        <span class="beat-dot"></span>
+                        <span class="beat-dot"></span>
+                        <span class="beat-dot"></span>
+                        <span class="beat-dot"></span>
+                    </div>
+                    <div class="flex items-center gap-1.5" title="Chiết suất kính thay đổi thực theo âm thanh">
+                        <span class="opacity-60">IOR</span>
+                        <span id="hud-ior" class="font-bold">1.52</span>
+                    </div>
+                    <div class="flex items-center gap-1.5" title="Tốc độ khung hình thực tế (FPS)">
+                        <span class="opacity-60">FPS</span>
+                        <span id="hud-fps" class="font-bold text-emerald-300">60</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Quick Upload & Studio Controls -->
+            <div class="flex items-center gap-2 flex-wrap">
+                <button type="button" id="toggle-overdrive-btn" class="liquid-control is-active px-3 py-1.5 rounded-full text-xs font-extrabold flex items-center gap-1.5" title="Chế độ phản ứng âm thanh & sóng xung kích cực mạnh (Phím O)">
+                    <svg class="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                    </svg>
+                    <span id="overdrive-label">Overdrive ON</span>
+                </button>
+
+                <button type="button" id="quick-upload-cover-btn" class="liquid-control px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5" title="Tải ảnh bìa nhạc (PNG, JPG, WebP)">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <rect x="3" y="3" width="18" height="18" rx="3"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <path d="M21 15l-5-5L5 21"></path>
+                    </svg>
+                    <span>Ảnh bìa</span>
+                </button>
+
+                <button type="button" id="quick-upload-audio-btn" class="liquid-control px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5" title="Tải file nhạc (MP3, WAV, OGG, FLAC...)">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M9 18V5l12-2v13"></path>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <circle cx="18" cy="16" r="3"></circle>
+                    </svg>
+                    <span>File nhạc</span>
+                </button>
+
+                <button type="button" id="toggle-demo-btn" class="liquid-control is-active px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5" title="Dùng nhịp mẫu thời gian thực hoặc file đã tải">
+                    <span id="source-mode-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    <span id="source-mode-label">Nhạc mẫu 124 BPM</span>
+                </button>
+
+                <button type="button" id="open-drawer-btn" class="liquid-control px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5" title="Tùy chỉnh tên, màu, chiết suất IOR & nền tĩnh">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"></path>
+                        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"></path>
+                    </svg>
+                    <span>Tùy chỉnh</span>
+                </button>
+
+                <button type="button" id="presentation-btn" class="liquid-control p-2 rounded-full" title="Chế độ trình chiếu sạch (Phím H)">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Center Stage: Exact Reference Composition Elevated in Liquid Glass -->
+        <main class="flex-1 flex items-center justify-center py-4">
+            <section id="main-player-stage" class="liquid-surface rounded-[38px] w-full max-w-[1180px] px-6 py-10 sm:px-10 sm:py-12 lg:px-14 lg:py-14 flex flex-col lg:flex-row items-center justify-between gap-12 lg:gap-16">
+                <!-- GPU-only beat flash halo layer -->
+                <div id="stage-beat-rim" class="stage-beat-rim" aria-hidden="true"></div>
+
+                <!-- LEFT: Square Framed Cover + Ornate Audio-Reactive Ring -->
+                <div class="cover-stage-wrapper">
+                    <!-- Rotating Ornate Sacred-Geometry Ring (Reacts to Beat & FFT) -->
+                    <canvas id="ring-canvas"></canvas>
+
+                    <!-- Liquid Glass Framed Album Cover (Click or Drag-Drop to Upload) -->
+                    <div id="cover-drop-zone" class="cover-glass-frame group cursor-pointer" title="Nhấn hoặc kéo thả ảnh bìa vào đây">
+                        <div id="cover-beat-rim" class="cover-beat-rim" aria-hidden="true"></div>
+                        <img id="cover-image" src="" alt="Ảnh bìa bài hát" class="w-full h-full object-cover select-none">
+
+                        <!-- Subtle Top Status Icons (Matching Reference Image Aesthetic, Toggleable) -->
+                        <div id="cover-overlay-top" class="absolute top-3 right-3.5 z-10 flex items-center gap-2 text-white/90 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)] pointer-events-none">
+                            <!-- Signal Bars -->
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="2" y="15" width="3" height="6" rx="1"></rect>
+                                <rect x="7.5" y="11" width="3" height="10" rx="1"></rect>
+                                <rect x="13" y="7" width="3" height="14" rx="1"></rect>
+                                <rect x="18.5" y="3" width="3" height="18" rx="1"></rect>
+                            </svg>
+                            <!-- Wi-Fi -->
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round">
+                                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                                <circle cx="12" cy="19.5" r="1.2" fill="currentColor"></circle>
+                            </svg>
+                            <!-- Battery -->
+                            <div class="flex items-center gap-0.5">
+                                <div class="w-6 h-3.5 rounded-[3px] border-[1.6px] border-white/95 p-[1.5px] flex items-center">
+                                    <div id="cover-battery-fill" class="h-full w-full bg-white rounded-[1px] transition-all duration-75"></div>
+                                </div>
+                                <div class="w-[2px] h-1.5 bg-white/90 rounded-r-sm"></div>
+                            </div>
+                        </div>
+
+                        <!-- Subtle Bottom Social HUD Icons (Matching Reference Image Aesthetic, Toggleable) -->
+                        <div id="cover-overlay-bottom" class="absolute inset-x-0 bottom-0 z-10 px-5 py-3 bg-gradient-to-t from-black/70 via-black/25 to-transparent flex items-center justify-between text-white/90 pointer-events-none">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h-3v9h-5v-6h-2v6H6v-9H3l9-8z"/></svg>
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
+                            <svg id="cover-heart-icon" class="w-4 h-4 transition-transform duration-75" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"/></svg>
+                        </div>
+
+                        <!-- Hover Upload Hint Overlay -->
+                        <div class="absolute inset-0 z-20 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center gap-2 text-white text-center px-4">
+                            <div class="w-11 h-11 rounded-2xl border border-white/50 bg-white/15 flex items-center justify-center">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"></path>
+                                </svg>
+                            </div>
+                            <span class="text-xs font-bold tracking-wide">Đổi ảnh bìa nhạc</span>
+                            <span class="text-[10px] opacity-75">Nhấn chọn hoặc kéo thả ảnh</span>
+                        </div>
+
+                        <div id="cover-glass-sheen" class="cover-glass-sheen"></div>
+                    </div>
+                </div>
+
+                <!-- RIGHT: Title, Live Time & BPM, Seekable Progress, Hanging Spectrum, Controls & Channel Signature -->
+                <div class="flex-1 w-full flex flex-col gap-4 min-w-0">
+
+                    <!-- Track Title + Real-Time Audio Level Badges -->
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-start justify-between gap-3 flex-wrap">
+                            <h1 id="track-title-display" class="track-title-display inline-editable text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight px-1 -mx-1" title="Nhấn để sửa tên bài hát">
+                                <span id="title-first-char">T</span><span id="title-rest-chars" class="title-accent-part">eeth</span>
+                            </h1>
+
+                            <!-- Live Mobile/Desktop Compact Beat Badge -->
+                            <div class="liquid-surface rounded-2xl px-3 py-1.5 flex items-center gap-2.5 font-mono-hud text-[11px] shrink-0">
+                                <div class="flex flex-col items-end leading-tight">
+                                    <span id="badge-bpm" class="font-extrabold text-xs">124 BPM</span>
+                                    <span id="badge-energy" class="text-[10px] opacity-70">READY</span>
+                                </div>
+                                <div class="flex items-end gap-[3px] h-5">
+                                    <span id="mini-bar-bass" class="w-1 rounded-full bg-white transition-all duration-75" style="height: 28%;"></span>
+                                    <span id="mini-bar-mid" class="w-1 rounded-full bg-rose-500 transition-all duration-75" style="height: 45%;"></span>
+                                    <span id="mini-bar-high" class="w-1 rounded-full bg-white/80 transition-all duration-75" style="height: 22%;"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Real-Time Time Counter Row (e.g. 0:48 - 2:14) -->
+                        <div class="flex items-center justify-between gap-3 flex-wrap pt-1">
+                            <div class="font-mono-hud text-xl sm:text-2xl font-bold tracking-wider flex items-center gap-2">
+                                <span id="time-current">0:00</span>
+                                <span class="opacity-60">-</span>
+                                <span id="time-duration">2:14</span>
+                            </div>
+
+                            <!-- Real-time Frequency & Beat Readout Pill -->
+                            <div class="flex items-center gap-2 font-mono-hud text-[11px] opacity-80">
+                                <span id="beat-status-text" class="px-2.5 py-0.5 rounded-full border border-white/20 bg-white/5">BEAT SYNC</span>
+                                <span id="audio-filename-pill" class="max-w-[180px] truncate opacity-75">Built-in Synth Track</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar + Hanging Equalizer Spectrum Visualizer -->
+                    <div class="flex flex-col">
+                        <!-- Seekable Liquid Glass Progress Track -->
+                        <div id="progress-track" class="progress-track" role="slider" aria-label="Tiến độ bài hát" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+                            <div id="progress-fill" class="progress-fill"></div>
+                        </div>
+
+                        <!-- Downward Hanging Real-Time FFT Spectrum Visualizer (White Bars + Crimson Peak Caps) -->
+                        <canvas id="spectrum-canvas"></canvas>
+                    </div>
+
+                    <!-- Centered Liquid Glass Media Transport Controls -->
+                    <div class="flex items-center justify-center gap-5 sm:gap-7 -mt-2">
+                        <button type="button" id="btn-rewind" aria-label="Tua lùi 10 giây" class="liquid-control w-12 h-12 rounded-2xl flex items-center justify-center" title="Tua lùi 10 giây (←)">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M11 19V5l-9 7 9 7zm11 0V5l-9 7 9 7z"/>
+                            </svg>
+                        </button>
+
+                        <button type="button" id="btn-play-pause" aria-label="Phát hoặc tạm dừng" class="liquid-control transport-btn-main rounded-[22px] flex items-center justify-center" title="Phát / Tạm dừng (Space)">
+                            <!-- Play Icon -->
+                            <svg id="icon-play" class="w-7 h-7 translate-x-0.5" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                            <!-- Pause Icon -->
+                            <svg id="icon-pause" class="w-7 h-7 hidden" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="6" y="4" width="4.5" height="16" rx="1.2"/>
+                                <rect x="13.5" y="4" width="4.5" height="16" rx="1.2"/>
+                            </svg>
+                        </button>
+
+                        <button type="button" id="btn-forward" aria-label="Tua tới 10 giây" class="liquid-control w-12 h-12 rounded-2xl flex items-center justify-center" title="Tua tới 10 giây (→)">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M13 5v14l9-7-9-7zM2 5v14l9-7-9-7z"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Bottom Row: Volume Slider + Channel / Artist Signature (Yukii Music style) -->
+                    <div class="flex flex-wrap items-end justify-between gap-4 pt-3 mt-1 border-t border-white/10">
+                        <!-- Volume Control -->
+                        <div class="flex items-center gap-2.5">
+                            <button type="button" id="btn-mute" class="liquid-control p-2 rounded-xl" aria-label="Tắt hoặc bật âm thanh" title="Tắt tiếng (M)">
+                                <svg id="icon-vol-on" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                                </svg>
+                                <svg id="icon-vol-off" class="w-4 h-4 hidden text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                    <line x1="23" y1="9" x2="17" y2="15"></line>
+                                    <line x1="17" y1="9" x2="23" y2="15"></line>
+                                </svg>
+                            </button>
+                            <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.85" class="w-24 sm:w-28" aria-label="Âm lượng">
+                        </div>
+
+                        <!-- Bottom-Right Channel / Artist Tag (Editable inline) -->
+                        <div class="channel-hud-line mr-4">
+                            <span id="channel-name-display" class="inline-editable font-mono-hud text-lg sm:text-xl font-bold tracking-widest px-1.5" title="Nhấn để sửa tên nghệ sĩ / kênh">Yukii Music</span>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+
+        <!-- Minimal Presentation Mode Exit Pill (Visible only in Presentation Mode) -->
+        <button type="button" id="exit-presentation-btn" class="hidden fixed top-4 right-4 z-50 liquid-control px-3.5 py-2 rounded-full text-xs font-bold flex items-center gap-2">
+            <span>Hiện thanh công cụ (H)</span>
+        </button>
+    </div>
+
+    <!-- Slide-Over Liquid Glass Studio Customization Drawer -->
+    <div id="studio-drawer-backdrop" aria-hidden="true"></div>
+    <aside id="studio-drawer" class="liquid-surface flex flex-col gap-5 overflow-y-auto" role="dialog" aria-modal="false" aria-labelledby="drawer-title" aria-hidden="true">
+        <div class="flex items-center justify-between border-b border-white/15 pb-3.5">
+            <div>
+                <p class="text-[10px] font-extrabold uppercase tracking-[0.2em] text-rose-400">Liquid Glass Audio Studio</p>
+                <h2 id="drawer-title" class="text-base font-extrabold mt-0.5">Tùy Chỉnh Trình Phát &amp; Quang Học</h2>
+            </div>
+            <button type="button" id="close-drawer-btn" aria-label="Đóng bảng tùy chỉnh" class="liquid-control p-2 rounded-xl">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- 1. Media Upload Section -->
+        <div class="flex flex-col gap-2.5">
+            <span class="text-[11px] font-bold uppercase tracking-wider opacity-75">1. Tải Dữ Liệu Nhạc &amp; Ảnh Bìa</span>
+            <div class="grid grid-cols-2 gap-2.5">
+                <button type="button" id="drawer-upload-cover" class="liquid-control rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 text-xs font-bold">
+                    <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <rect x="3" y="3" width="18" height="18" rx="3"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <path d="M21 15l-5-5L5 21"></path>
+                    </svg>
+                    <span>Tải Ảnh Bìa</span>
+                </button>
+                <button type="button" id="drawer-upload-audio" class="liquid-control rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 text-xs font-bold">
+                    <svg class="w-5 h-5 text-sky-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M9 18V5l12-2v13"></path>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <circle cx="18" cy="16" r="3"></circle>
+                    </svg>
+                    <span>Tải File Nhạc</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. Track Metadata Inputs -->
+        <div class="flex flex-col gap-3">
+            <span class="text-[11px] font-bold uppercase tracking-wider opacity-75">2. Thông Tin Hiển Thị</span>
+            <label class="flex flex-col gap-1.5 text-xs">
+                <span class="font-semibold opacity-85">Tên bài hát (Ký tự đầu trắng, phần sau nổi bật)</span>
+                <input type="text" id="input-track-title" class="glass-input" value="Teeth" maxlength="48" placeholder="Nhập tên bài hát...">
+            </label>
+            <label class="flex flex-col gap-1.5 text-xs">
+                <span class="font-semibold opacity-85">Tên kênh / Nghệ sĩ (Góc dưới phải)</span>
+                <input type="text" id="input-channel-name" class="glass-input" value="Yukii Music" maxlength="36" placeholder="Nhập tên nghệ sĩ hoặc kênh...">
+            </label>
+        </div>
+
+        <!-- 3. Static Backdrop Selector (Strict Zero Animated Background) -->
+        <div class="flex flex-col gap-2">
+            <span class="text-[11px] font-bold uppercase tracking-wider opacity-75">3. Nền Tĩnh Phía Sau (Không Chuyển Động)</span>
+            <div class="grid grid-cols-3 gap-2" id="backdrop-mode-group">
+                <button type="button" data-backdrop="noir" class="backdrop-btn liquid-control is-active py-2 px-2 rounded-xl text-[11px] font-bold">Đêm Noir</button>
+                <button type="button" data-backdrop="cover" class="backdrop-btn liquid-control py-2 px-2 rounded-xl text-[11px] font-bold">Ảnh Bìa Tĩnh</button>
+                <button type="button" data-backdrop="studio-light" class="backdrop-btn liquid-control py-2 px-2 rounded-xl text-[11px] font-bold">Studio Sáng</button>
+            </div>
+            <p class="text-[11px] opacity-65 leading-relaxed">
+                Nền được render tĩnh hoàn toàn vào FBO WebGL. Chỉ các bề mặt Liquid Glass và hệ thống âm thanh phản ứng thời gian thực theo nhạc.
+            </p>
+        </div>
+
+        <!-- 4. Accent Color Presets -->
+        <div class="flex flex-col gap-2">
+            <span class="text-[11px] font-bold uppercase tracking-wider opacity-75">4. Màu Nhấn Quang Phổ</span>
+            <div class="flex items-center gap-2.5 flex-wrap" id="accent-presets">
+                <button type="button" data-accent="#ef1a2d" class="accent-btn liquid-control is-active w-8 h-8 rounded-full flex items-center justify-center" title="Crimson Noir (Như ảnh mẫu)">
+                    <span class="w-4 h-4 rounded-full bg-[#ef1a2d]"></span>
+                </button>
+                <button type="button" data-accent="#38bdf8" class="accent-btn liquid-control w-8 h-8 rounded-full flex items-center justify-center" title="Optical Cyan">
+                    <span class="w-4 h-4 rounded-full bg-[#38bdf8]"></span>
+                </button>
+                <button type="button" data-accent="#a855f7" class="accent-btn liquid-control w-8 h-8 rounded-full flex items-center justify-center" title="Violet Prism">
+                    <span class="w-4 h-4 rounded-full bg-[#a855f7]"></span>
+                </button>
+                <button type="button" data-accent="#10b981" class="accent-btn liquid-control w-8 h-8 rounded-full flex items-center justify-center" title="Emerald Glass">
+                    <span class="w-4 h-4 rounded-full bg-[#10b981]"></span>
+                </button>
+                <button type="button" data-accent="#f59e0b" class="accent-btn liquid-control w-8 h-8 rounded-full flex items-center justify-center" title="Amber Caustic">
+                    <span class="w-4 h-4 rounded-full bg-[#f59e0b]"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 5. Optical Liquid Glass Parameters -->
+        <div class="flex flex-col gap-3">
+            <span class="text-[11px] font-bold uppercase tracking-wider opacity-75">5. Thông Số Khúc Xạ &amp; Độ Nhạy Nhạc</span>
+            <label class="flex flex-col gap-1.5 text-xs">
+                <div class="flex justify-between font-semibold">
+                    <span>Chiết suất kính gốc (Base IOR)</span>
+                    <span id="val-base-ior" class="font-mono-hud">1.52</span>
+                </div>
+                <input type="range" id="slider-base-ior" min="1.10" max="2.50" step="0.02" value="1.52">
+            </label>
+
+            <label class="flex flex-col gap-1.5 text-xs">
+                <div class="flex justify-between font-semibold">
+                    <span>Cường độ phản ứng nhạc</span>
+                    <span id="val-reactivity" class="font-mono-hud">155%</span>
+                </div>
+                <input type="range" id="slider-reactivity" min="0.4" max="2.5" step="0.05" value="1.55">
+            </label>
+
+            <label class="flex items-center justify-between pt-1 text-xs font-semibold cursor-pointer">
+                <span>Hiện biểu tượng giao diện trên ảnh bìa</span>
+                <input type="checkbox" id="toggle-cover-icons" checked class="w-4 h-4 accent-rose-500 rounded cursor-pointer">
+            </label>
+        </div>
+
+        <!-- Real-Time Audio Analysis Monitor -->
+        <div class="liquid-surface rounded-2xl p-3.5 flex flex-col gap-2 font-mono-hud text-[11px] mt-auto">
+            <div class="flex justify-between">
+                <span class="opacity-65">BASS (20–160Hz)</span>
+                <span id="mon-bass">0%</span>
+            </div>
+            <div class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div id="bar-mon-bass" class="h-full bg-white transition-all duration-75" style="width: 0%;"></div>
+            </div>
+            <div class="flex justify-between pt-1">
+                <span class="opacity-65">MID / VOCAL</span>
+                <span id="mon-mid">0%</span>
+            </div>
+            <div class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div id="bar-mon-mid" class="h-full bg-rose-500 transition-all duration-75" style="width: 0%;"></div>
+            </div>
+            <div class="flex justify-between pt-1">
+                <span class="opacity-65">TREBLE / AIR</span>
+                <span id="mon-high">0%</span>
+            </div>
+            <div class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div id="bar-mon-high" class="h-full bg-sky-300 transition-all duration-75" style="width: 0%;"></div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Liquid Glass Toast Container -->
+    <div id="toast-container" class="fixed bottom-6 right-6 z-80 flex flex-col gap-2 pointer-events-none max-w-sm w-[calc(100%-3rem)]"></div>
+
+    <script>
+        /**
+         * ============================================================================
+         * 1. STATIC-BACKDROP WEBGL LIQUID GLASS OPTICAL ENGINE (PURE SNELL REFRACTION)
+         *    - Bakes the background ONCE into an FBO texture (100% static, ZERO motion!)
+         *    - Zero per-frame DOM layout thrashing: lens bounds are cached and only
+         *      re-measured on resize/scroll/UI transitions.
+         *    - Intense acoustic shockwaves, dynamic Snell IOR spikes, RGB chromatic
+         *      prism dispersion, and specular edge flashes run 100% on the GPU!
+         * ============================================================================
+         */
+        class AudioReactiveLiquidGlassEngine {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.gl = canvas.getContext('webgl', {
+                    alpha: false,
+                    antialias: false,
+                    depth: false,
+                    stencil: false,
+                    powerPreference: 'high-performance'
+                });
+                this.isSupported = !!this.gl;
+
+                this.backdropMode = 'noir'; // 'noir' | 'cover' | 'studio-light'
+                this.coverImageElement = null;
+                this.baseIOR = 1.52;
+                this.accentRGB = [0.937, 0.102, 0.176]; // #ef1a2d
+
+                this.pointer = { x: 0.35, y: 0.20, targetX: 0.35, targetY: 0.20 };
+                this.elasticPulse = 0.0;
+                this.elasticVel = 0.0;
+                this.stageCenter = [0.35, 0.50];
+
+                const maxFragVecs = this.isSupported
+                    ? (this.gl.getParameter(this.gl.MAX_FRAGMENT_UNIFORM_VECTORS) || 64)
+                    : 64;
+                // Keep lens list tight & focused on main panels + key controls for peak GPU throughput
+                this.maxLenses = Math.max(6, Math.min(24, Math.floor((maxFragVecs - 22) / 2)));
+                this.lensEntries = [];
+                this.lensRects = new Float32Array(this.maxLenses * 4);
+                this.lensRadii = new Float32Array(this.maxLenses);
+                this.lensCount = 0;
+                this.lensesDirty = true;
+
+                // Offscreen 2D canvas used to paint static high-contrast backdrop once
+                this.backdrop2D = document.createElement('canvas');
+                this.backdropCtx = this.backdrop2D.getContext('2d');
+
+                if (this.isSupported) {
+                    this.initPipeline();
+                    this.cacheLensElements();
+                    this.bindObservers();
+                    this.resize();
+                }
+            }
+
+            compileShader(type, src) {
+                const gl = this.gl;
+                const sh = gl.createShader(type);
+                gl.shaderSource(sh, src);
+                gl.compileShader(sh);
+                if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+                    console.warn('GLSL Error:', gl.getShaderInfoLog(sh));
+                    gl.deleteShader(sh);
+                    return null;
+                }
+                return sh;
+            }
+
+            createProgram(vsSrc, fsSrc) {
+                const gl = this.gl;
+                const vs = this.compileShader(gl.VERTEX_SHADER, vsSrc);
+                const fs = this.compileShader(gl.FRAGMENT_SHADER, fsSrc);
+                if (!vs || !fs) return null;
+                const prog = gl.createProgram();
+                gl.attachShader(prog, vs);
+                gl.attachShader(prog, fs);
+                gl.linkProgram(prog);
+                if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+                    console.warn('Link Error:', gl.getProgramInfoLog(prog));
+                    gl.deleteProgram(prog);
+                    return null;
+                }
+                return prog;
+            }
+
+            initPipeline() {
+                const gl = this.gl;
+
+                const quadVS = `
+                    attribute vec2 a_pos;
+                    varying vec2 v_uv;
+                    void main() {
+                        v_uv = a_pos * 0.5 + 0.5;
+                        gl_Position = vec4(a_pos, 0.0, 1.0);
+                    }
+                `;
+
+                const lensFS = `
+                    #ifdef GL_FRAGMENT_PRECISION_HIGH
+                    precision highp float;
+                    #else
+                    precision mediump float;
+                    #endif
+
+                    varying vec2 v_uv;
+                    uniform sampler2D u_envTex;
+                    uniform vec2 u_res;
+                    uniform vec2 u_pointer;
+                    uniform vec2 u_stageCenter;
+                    uniform float u_ior;
+                    uniform float u_elastic;
+                    uniform float u_beat;
+                    uniform float u_shockwave;
+                    uniform float u_shockAmp;
+                    uniform float u_audioEnergy;
+                    uniform float u_audioHigh;
+                    uniform vec3 u_accent;
+                    uniform vec4 u_lenses[${this.maxLenses}];
+                    uniform float u_radii[${this.maxLenses}];
+                    uniform int u_lensCount;
+
+                    float sdRoundBox(vec2 p, vec2 b, float r) {
+                        vec2 q = abs(p) - b + r;
+                        return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+                    }
+
+                    void main() {
+                        vec2 domUV = vec2(v_uv.x, 1.0 - v_uv.y);
+                        vec2 pixelPos = domUV * u_res;
+                        vec2 sampleUV = domUV;
+
+                        bool insideGlass = false;
+                        vec2 dispVector = vec2(0.0);
+                        float chromaSpread = 0.0;
+                        float fresnelRim = 0.0;
+                        float edgeBandAcc = 0.0;
+                        float waveHighlight = 0.0;
+
+                        for (int i = 0; i < ${this.maxLenses}; i++) {
+                            if (i >= u_lensCount) break;
+                            vec4 rect = u_lenses[i];
+                            float r = u_radii[i];
+                            vec2 halfSize = rect.zw * 0.5;
+                            vec2 center = rect.xy + halfSize;
+                            vec2 rel = pixelPos - center;
+
+                            float dist = sdRoundBox(rel, halfSize, r);
+                            if (dist < 0.0) {
+                                insideGlass = true;
+                                float depth = -dist;
+                                float maxThickness = min(halfSize.x, halfSize.y);
+                                float meniscusWidth = min(38.0, maxThickness * 0.78) + (u_elastic + u_beat * 0.55) * 18.0;
+                                float rimFactor = clamp(1.0 - depth / max(meniscusWidth, 1.0), 0.0, 1.0);
+                                float meniscus = rimFactor * rimFactor * (3.0 - 2.0 * rimFactor);
+
+                                vec2 normal2D = normalize(rel + vec2(0.0001));
+                                float dynamicIOR = u_ior * (1.0 + u_elastic * 0.44 + u_beat * 0.26);
+
+                                // Expanding acoustic refraction shockwave inside the Liquid Glass body
+                                vec2 aspectVec = vec2(u_res.x / max(u_res.y, 1.0), 1.0);
+                                vec2 fromOrigin = (domUV - u_stageCenter) * aspectVec;
+                                float radialDist = length(fromOrigin);
+                                float waveRing = exp(-pow((radialDist - u_shockwave * 1.15) * 10.5, 2.0)) * u_shockAmp;
+                                vec2 waveDir = normalize(fromOrigin + vec2(0.0001));
+
+                                vec2 magOffset = -(rel / max(u_res, vec2(1.0))) * 0.052 * dynamicIOR;
+                                vec2 edgeRefract = -normal2D * meniscus * 0.088 * dynamicIOR;
+                                vec2 shockRefract = waveDir * waveRing * 0.055;
+
+                                dispVector = magOffset + edgeRefract + shockRefract;
+                                chromaSpread = (meniscus * (0.018 + u_audioEnergy * 0.032 + u_beat * 0.028) + waveRing * 0.036) * dynamicIOR;
+
+                                float edgeBand = smoothstep(14.0, 0.0, depth);
+                                vec2 toLight = normalize(u_pointer - domUV + vec2(0.001));
+                                float lightCatch = clamp(dot(normal2D, -toLight) * 0.5 + 0.5, 0.0, 1.0);
+                                fresnelRim = edgeBand * (0.40 + 0.60 * lightCatch);
+                                edgeBandAcc = edgeBand;
+                                waveHighlight = waveRing;
+                                break;
+                            }
+                        }
+
+                        if (insideGlass) {
+                            vec2 refractedUV = clamp(sampleUV + dispVector, 0.002, 0.998);
+                            vec2 chromaDir = normalize(dispVector + vec2(0.0001)) * chromaSpread;
+
+                            float r = texture2D(u_envTex, clamp(refractedUV + chromaDir, 0.002, 0.998)).r;
+                            float g = texture2D(u_envTex, refractedUV).g;
+                            float b = texture2D(u_envTex, clamp(refractedUV - chromaDir, 0.002, 0.998)).b;
+
+                            vec3 glassColor = vec3(r, g, b);
+                            // Intense beat-driven specular rim, caustic edge glow, and acoustic shockwave sheen
+                            glassColor += vec3(0.98, 0.99, 1.0) * fresnelRim * (0.48 + u_audioHigh * 0.42 + u_beat * 0.45);
+                            glassColor += u_accent * edgeBandAcc * (0.08 + u_audioEnergy * 0.36 + u_beat * 0.55);
+                            glassColor += mix(vec3(1.0), u_accent, 0.55) * waveHighlight * 0.48;
+                            gl_FragColor = vec4(glassColor, 1.0);
+                        } else {
+                            // Strictly 100% STATIC background outside glass surfaces
+                            gl_FragColor = texture2D(u_envTex, sampleUV);
+                        }
+                    }
+                `;
+
+                this.lensProgram = this.createProgram(quadVS, lensFS);
+                if (!this.lensProgram) {
+                    this.isSupported = false;
+                    return;
+                }
+
+                this.quadBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+
+                this.u = {
+                    envTex: gl.getUniformLocation(this.lensProgram, 'u_envTex'),
+                    res: gl.getUniformLocation(this.lensProgram, 'u_res'),
+                    pointer: gl.getUniformLocation(this.lensProgram, 'u_pointer'),
+                    stageCenter: gl.getUniformLocation(this.lensProgram, 'u_stageCenter'),
+                    ior: gl.getUniformLocation(this.lensProgram, 'u_ior'),
+                    elastic: gl.getUniformLocation(this.lensProgram, 'u_elastic'),
+                    beat: gl.getUniformLocation(this.lensProgram, 'u_beat'),
+                    shockwave: gl.getUniformLocation(this.lensProgram, 'u_shockwave'),
+                    shockAmp: gl.getUniformLocation(this.lensProgram, 'u_shockAmp'),
+                    audioEnergy: gl.getUniformLocation(this.lensProgram, 'u_audioEnergy'),
+                    audioHigh: gl.getUniformLocation(this.lensProgram, 'u_audioHigh'),
+                    accent: gl.getUniformLocation(this.lensProgram, 'u_accent'),
+                    lenses: gl.getUniformLocation(this.lensProgram, 'u_lenses'),
+                    radii: gl.getUniformLocation(this.lensProgram, 'u_radii'),
+                    lensCount: gl.getUniformLocation(this.lensProgram, 'u_lensCount')
+                };
+
+                this.envTexture = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, this.envTexture);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            }
+
+            /**
+             * Paints a 100% STATIC high-contrast background texture once and uploads it
+             * to WebGL so Liquid Glass lenses can physically refract it without any moving wallpaper.
+             */
+            bakeStaticBackdrop() {
+                if (!this.isSupported) return;
+                const w = Math.max(1, this.canvas.width);
+                const h = Math.max(1, this.canvas.height);
+                this.backdrop2D.width = w;
+                this.backdrop2D.height = h;
+                const ctx = this.backdropCtx;
+
+                ctx.save();
+                if (this.backdropMode === 'cover' && this.coverImageElement && this.coverImageElement.complete && this.coverImageElement.naturalWidth > 0) {
+                    // Static cover art backdrop (aspect-fill + moody vignette, zero motion)
+                    const img = this.coverImageElement;
+                    const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+                    const dw = img.naturalWidth * scale;
+                    const dh = img.naturalHeight * scale;
+                    ctx.drawImage(img, (w - dw) * 0.5, (h - dh) * 0.5, dw, dh);
+
+                    // Dark optical scrim so foreground HUD stays ultra-legible while glass bevels refract crisp cover details
+                    const scrim = ctx.createRadialGradient(w * 0.5, h * 0.45, Math.min(w, h) * 0.1, w * 0.5, h * 0.5, Math.max(w, h) * 0.75);
+                    scrim.addColorStop(0, 'rgba(6, 9, 16, 0.56)');
+                    scrim.addColorStop(1, 'rgba(3, 5, 10, 0.88)');
+                    ctx.fillStyle = scrim;
+                    ctx.fillRect(0, 0, w, h);
+                } else if (this.backdropMode === 'studio-light') {
+                    // Static architectural light studio
+                    const grad = ctx.createLinearGradient(0, 0, w, h);
+                    grad.addColorStop(0, '#eef4fb');
+                    grad.addColorStop(0.5, '#d5e2f2');
+                    grad.addColorStop(1, '#c5d5eb');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, w, h);
+
+                    // Crisp static studio architectural ribs & light shafts (for visible Snell glass bending)
+                    ctx.strokeStyle = 'rgba(15, 35, 70, 0.10)';
+                    ctx.lineWidth = Math.max(1, w * 0.0012);
+                    const step = Math.max(48, Math.floor(w / 22));
+                    for (let x = 0; x < w; x += step) {
+                        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+                    }
+                    for (let y = 0; y < h; y += step) {
+                        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+                    }
+
+                    // Static soft diagonal specular light beam
+                    const beam = ctx.createLinearGradient(0, 0, w * 0.65, h * 0.85);
+                    beam.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+                    beam.addColorStop(0.45, 'rgba(255, 255, 255, 0.0)');
+                    beam.addColorStop(1, 'rgba(239, 26, 45, 0.09)');
+                    ctx.fillStyle = beam;
+                    ctx.fillRect(0, 0, w, h);
+                } else {
+                    // Default 'noir' static backdrop: Dark atmospheric street-night silhouette matching reference image
+                    const grad = ctx.createLinearGradient(0, 0, 0, h);
+                    grad.addColorStop(0, '#04060a');
+                    grad.addColorStop(0.58, '#090e16');
+                    grad.addColorStop(1, '#121822');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, w, h);
+
+                    // Static subtle atmospheric moonlight & distant crimson halo (completely static!)
+                    const lampGlow = ctx.createRadialGradient(w * 0.19, h * 0.18, 2, w * 0.19, h * 0.22, Math.max(w, h) * 0.42);
+                    lampGlow.addColorStop(0, 'rgba(185, 215, 245, 0.20)');
+                    lampGlow.addColorStop(0.35, 'rgba(72, 108, 145, 0.08)');
+                    lampGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    ctx.fillStyle = lampGlow;
+                    ctx.fillRect(0, 0, w, h);
+
+                    const horizonGlow = ctx.createRadialGradient(w * 0.72, h * 0.88, 10, w * 0.72, h * 0.88, Math.max(w, h) * 0.45);
+                    horizonGlow.addColorStop(0, 'rgba(239, 26, 45, 0.15)');
+                    horizonGlow.addColorStop(0.5, 'rgba(120, 20, 35, 0.05)');
+                    horizonGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    ctx.fillStyle = horizonGlow;
+                    ctx.fillRect(0, 0, w, h);
+
+                    // Static streetlamp silhouette on upper-left (subtle nod to reference image)
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(200, 220, 240, 0.08)';
+                    ctx.lineWidth = Math.max(4, w * 0.005);
+                    ctx.beginPath();
+                    ctx.moveTo(w * 0.08, h);
+                    ctx.quadraticCurveTo(w * 0.09, h * 0.42, w * 0.16, h * 0.14);
+                    ctx.stroke();
+
+                    // Lamp head glow
+                    ctx.fillStyle = 'rgba(220, 236, 252, 0.22)';
+                    ctx.beginPath();
+                    ctx.ellipse(w * 0.175, h * 0.14, w * 0.025, h * 0.011, -0.35, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+
+                    // Static fine architectural optical grid lines (gives Liquid Glass bevels crisp lines to refract!)
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.032)';
+                    ctx.lineWidth = 1;
+                    const step = Math.max(54, Math.floor(w / 20));
+                    for (let x = 0; x < w; x += step) {
+                        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+                    }
+                    for (let y = 0; y < h; y += step) {
+                        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+                    }
+
+                    // Static subtle diagonal glass-studio light streaks
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
+                    ctx.lineWidth = Math.max(1.5, w * 0.0015);
+                    ctx.beginPath();
+                    ctx.moveTo(w * 0.35, 0); ctx.lineTo(w * 0.72, h);
+                    ctx.moveTo(w * 0.62, 0); ctx.lineTo(w * 0.28, h);
+                    ctx.stroke();
+                }
+                ctx.restore();
+
+                const gl = this.gl;
+                gl.bindTexture(gl.TEXTURE_2D, this.envTexture);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.backdrop2D);
+            }
+
+            setBackdropMode(mode) {
+                this.backdropMode = mode;
+                this.bakeStaticBackdrop();
+                this.triggerElasticImpulse(0.55);
+            }
+
+            setCoverImage(imgEl) {
+                this.coverImageElement = imgEl;
+                if (this.backdropMode === 'cover') {
+                    this.bakeStaticBackdrop();
+                }
+            }
+
+            setAccentHex(hex) {
+                const clean = hex.replace('#', '');
+                const num = parseInt(clean, 16);
+                if (!Number.isNaN(num)) {
+                    this.accentRGB = [
+                        ((num >> 16) & 255) / 255,
+                        ((num >> 8) & 255) / 255,
+                        (num & 255) / 255
+                    ];
+                }
+            }
+
+            setBaseIOR(val) {
+                this.baseIOR = val;
+            }
+
+            triggerElasticImpulse(strength = 0.45) {
+                this.elasticVel = Math.max(-1.6, Math.min(1.6, this.elasticVel + strength));
+            }
+
+            markLensesDirty() {
+                this.lensesDirty = true;
+            }
+
+            cacheLensElements() {
+                const selector = '#main-player-stage, #top-hud-bar, #studio-drawer.is-open, .liquid-control, .liquid-toast';
+                const all = Array.from(document.querySelectorAll(selector));
+                const entries = [];
+                for (let i = 0; i < all.length; i++) {
+                    const el = all[i];
+                    const st = getComputedStyle(el);
+                    if (st.display === 'none' || st.visibility === 'hidden' || parseFloat(st.opacity) < 0.05) continue;
+                    const r = el.getBoundingClientRect();
+                    if (r.width <= 4 || r.height <= 4 || r.right <= 0 || r.bottom <= 0 || r.left >= innerWidth || r.top >= innerHeight) continue;
+                    entries.push({
+                        el,
+                        area: r.width * r.height,
+                        radiusCss: parseFloat(st.borderTopLeftRadius) || 20
+                    });
+                }
+                // Sort smallest lenses first so buttons inside panels refract independently
+                entries.sort((a, b) => a.area - b.area);
+                this.lensEntries = entries.slice(0, this.maxLenses);
+                this.lensesDirty = true;
+                this.measureLenses();
+            }
+
+            measureLenses() {
+                const dpr = this.dpr || 1;
+                let count = 0;
+                const coverEl = document.getElementById('cover-drop-zone');
+                if (coverEl) {
+                    const cr = coverEl.getBoundingClientRect();
+                    if (cr.width > 0) {
+                        this.stageCenter[0] = (cr.left + cr.width * 0.5) / Math.max(window.innerWidth, 1);
+                        this.stageCenter[1] = (cr.top + cr.height * 0.5) / Math.max(window.innerHeight, 1);
+                    }
+                }
+                for (let i = 0; i < this.lensEntries.length && count < this.maxLenses; i++) {
+                    const entry = this.lensEntries[i];
+                    const rect = entry.el.getBoundingClientRect();
+                    if (rect.width <= 0 || rect.height <= 0) continue;
+
+                    this.lensRects[count * 4 + 0] = rect.left * dpr;
+                    this.lensRects[count * 4 + 1] = rect.top * dpr;
+                    this.lensRects[count * 4 + 2] = rect.width * dpr;
+                    this.lensRects[count * 4 + 3] = rect.height * dpr;
+                    this.lensRadii[count] = Math.min(entry.radiusCss * dpr, Math.min(rect.width, rect.height) * 0.5 * dpr);
+                    count++;
+                }
+                this.lensCount = count;
+                this.lensesDirty = false;
+            }
+
+            bindObservers() {
+                let resizeTimer = null;
+                window.addEventListener('resize', () => {
+                    if (resizeTimer) cancelAnimationFrame(resizeTimer);
+                    resizeTimer = requestAnimationFrame(() => {
+                        this.resize();
+                        this.cacheLensElements();
+                    });
+                }, { passive: true });
+                window.addEventListener('scroll', () => { this.lensesDirty = true; }, { passive: true });
+                window.addEventListener('pointermove', (e) => {
+                    this.pointer.targetX = e.clientX / Math.max(window.innerWidth, 1);
+                    this.pointer.targetY = e.clientY / Math.max(window.innerHeight, 1);
+                }, { passive: true });
+                document.addEventListener('pointerdown', (e) => {
+                    if (e.target.closest('.liquid-control')) this.triggerElasticImpulse(0.48);
+                }, { passive: true });
+            }
+
+            resize() {
+                if (!this.isSupported) return;
+                // Adaptive DPR cap keeps GPU fill-rate locked at 60-120fps even on 4K displays
+                const maxDpr = window.innerWidth > 1440 ? 1.25 : 1.5;
+                this.dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+                this.canvas.width = Math.max(1, Math.floor(window.innerWidth * this.dpr));
+                this.canvas.height = Math.max(1, Math.floor(window.innerHeight * this.dpr));
+                this.bakeStaticBackdrop();
+                this.lensesDirty = true;
+                this.measureLenses();
+            }
+
+            render(audioMetrics) {
+                if (!this.isSupported) return this.baseIOR;
+
+                // Smooth pointer + audio-reactive light angle sway
+                this.pointer.x += (this.pointer.targetX - this.pointer.x) * 0.16;
+                this.pointer.y += (this.pointer.targetY - this.pointer.y) * 0.16;
+
+                // Snappy elastic meniscus spring physics driven by kicks & snares
+                const springForce = -0.26 * this.elasticPulse;
+                this.elasticVel = (this.elasticVel + springForce) * 0.72;
+                this.elasticPulse += this.elasticVel;
+
+                // ONLY re-measure DOM rects when layout actually changed (ZERO per-frame layout reflow!)
+                if (this.lensesDirty) {
+                    this.measureLenses();
+                }
+
+                const gl = this.gl;
+                gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+                gl.useProgram(this.lensProgram);
+
+                const posLoc = gl.getAttribLocation(this.lensProgram, 'a_pos');
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
+                gl.enableVertexAttribArray(posLoc);
+                gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, this.envTexture);
+                gl.uniform1i(this.u.envTex, 0);
+
+                const react = audioMetrics.reactivity;
+                const dynamicIOR = this.baseIOR + audioMetrics.bass * 0.68 * react + audioMetrics.beat * 0.62 * react;
+                gl.uniform2f(this.u.res, this.canvas.width, this.canvas.height);
+                gl.uniform2f(this.u.pointer, this.pointer.x, this.pointer.y);
+                gl.uniform2f(this.u.stageCenter, this.stageCenter[0], this.stageCenter[1]);
+                gl.uniform1f(this.u.ior, dynamicIOR);
+                gl.uniform1f(this.u.elastic, this.elasticPulse + audioMetrics.beat * 0.52 * react);
+                gl.uniform1f(this.u.beat, Math.min(1.8, audioMetrics.beat * react));
+                gl.uniform1f(this.u.shockwave, audioMetrics.shockwave);
+                gl.uniform1f(this.u.shockAmp, Math.min(1.6, audioMetrics.shockAmp * react));
+                gl.uniform1f(this.u.audioEnergy, Math.min(2.0, audioMetrics.energy * react));
+                gl.uniform1f(this.u.audioHigh, Math.min(2.0, (audioMetrics.high + audioMetrics.snare * 0.7) * react));
+                gl.uniform3f(this.u.accent, this.accentRGB[0], this.accentRGB[1], this.accentRGB[2]);
+                gl.uniform4fv(this.u.lenses, this.lensRects.subarray(0, this.maxLenses * 4));
+                gl.uniform1fv(this.u.radii, this.lensRadii.subarray(0, this.maxLenses));
+                gl.uniform1i(this.u.lensCount, this.lensCount);
+
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+                return dynamicIOR;
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 2. REAL-TIME WEB AUDIO ENGINE + MULTI-BAND FLUX BEAT DETECTOR (ZERO-GC)
+         * ============================================================================
+         */
+        class RealtimeAudioStudioEngine {
+            constructor(audioElement) {
+                this.audioEl = audioElement;
+                this.ctx = null;
+                this.analyser = null;
+                this.masterGain = null;
+                this.mediaSource = null;
+
+                this.mode = 'demo'; // 'demo' | 'file'
+                this.isPlaying = false;
+                this.volume = 0.85;
+                this.isMuted = false;
+
+                // Demo synth playback clock (2:14 = 134s matching reference aesthetic)
+                this.demoDuration = 134;
+                this.demoTime = 0;
+                this.demoBpm = 124;
+                this.demoStepIndex = 0;
+                this.demoTimer = null;
+                this.lastTickTimestamp = 0;
+
+                // FFT Buffers (1024 FFT -> 512 bins, faster & punchier temporal response!)
+                this.freqData = new Uint8Array(512);
+                this.prevFreqData = new Uint8Array(512);
+
+                // Zero-GC circular ring buffers for Kick & Snare onset detection
+                this.histLen = 36;
+                this.bassRing = new Float32Array(this.histLen);
+                this.midRing = new Float32Array(this.histLen);
+                this.ringIdx = 0;
+                this.ringFilled = 0;
+
+                this.ibiRing = new Float32Array(12);
+                this.ibiSorted = new Float32Array(12);
+                this.ibiCount = 0;
+                this.ibiIdx = 0;
+
+                this.lastBeatTimestamp = 0;
+                this.lastSnareTimestamp = 0;
+                this.estimatedBpm = 124;
+                this.beatPhase = 0; // 0..3
+                this.beatPulse = 0;
+                this.snarePulse = 0;
+                this.shockwave = 1.5;
+                this.shockAmp = 0;
+
+                this.smoothBass = 0;
+                this.smoothMid = 0;
+                this.smoothHigh = 0;
+                this.smoothEnergy = 0;
+
+                // Reusable metrics output object (zero per-frame allocations)
+                this.metrics = {
+                    bass: 0, mid: 0, high: 0, energy: 0,
+                    beat: 0, snare: 0, shockwave: 1.5, shockAmp: 0,
+                    bpm: 124, beatPhase: 0, freqData: this.freqData, reactivity: 1.55
+                };
+
+                this.onBeatCallback = null;
+                this.onSnareCallback = null;
+            }
+
+            ensureContext() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                    this.analyser = this.ctx.createAnalyser();
+                    this.analyser.fftSize = 1024;
+                    this.analyser.smoothingTimeConstant = 0.68;
+
+                    this.masterGain = this.ctx.createGain();
+                    this.masterGain.gain.value = this.isMuted ? 0 : this.volume;
+
+                    this.masterGain.connect(this.analyser);
+                    this.analyser.connect(this.ctx.destination);
+
+                    this.freqData = new Uint8Array(this.analyser.frequencyBinCount);
+                    this.prevFreqData = new Uint8Array(this.analyser.frequencyBinCount);
+                    this.metrics.freqData = this.freqData;
+
+                    try {
+                        this.mediaSource = this.ctx.createMediaElementSource(this.audioEl);
+                        this.mediaSource.connect(this.masterGain);
+                    } catch (err) {
+                        console.warn('MediaElementSource init note:', err);
+                    }
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            setVolume(v) {
+                this.volume = Math.max(0, Math.min(1, v));
+                if (this.masterGain && this.ctx) {
+                    this.masterGain.gain.setTargetAtTime(this.isMuted ? 0 : this.volume, this.ctx.currentTime, 0.02);
+                }
+            }
+
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                this.setVolume(this.volume);
+                return this.isMuted;
+            }
+
+            loadAudioFile(file) {
+                this.stopDemoScheduler();
+                this.audioEl.pause();
+                if (this.currentObjectUrl) URL.revokeObjectURL(this.currentObjectUrl);
+                this.currentObjectUrl = URL.createObjectURL(file);
+                this.audioEl.src = this.currentObjectUrl;
+                this.audioEl.load();
+                this.mode = 'file';
+                this.resetBeatStats();
+            }
+
+            switchToDemo() {
+                this.audioEl.pause();
+                this.mode = 'demo';
+                this.resetBeatStats();
+                if (this.isPlaying) {
+                    this.startDemoScheduler();
+                }
+            }
+
+            resetBeatStats() {
+                this.bassRing.fill(0);
+                this.midRing.fill(0);
+                this.ringIdx = 0;
+                this.ringFilled = 0;
+                this.ibiCount = 0;
+                this.ibiIdx = 0;
+                this.lastBeatTimestamp = 0;
+                this.lastSnareTimestamp = 0;
+                this.estimatedBpm = this.mode === 'demo' ? this.demoBpm : 0;
+            }
+
+            async play() {
+                this.ensureContext();
+                this.isPlaying = true;
+                this.lastTickTimestamp = performance.now();
+                if (this.mode === 'file') {
+                    await this.audioEl.play();
+                } else {
+                    this.startDemoScheduler();
+                }
+            }
+
+            pause() {
+                this.isPlaying = false;
+                if (this.mode === 'file') {
+                    this.audioEl.pause();
+                } else {
+                    this.stopDemoScheduler();
+                }
+            }
+
+            togglePlay() {
+                if (this.isPlaying) {
+                    this.pause();
+                } else {
+                    this.play();
+                }
+                return this.isPlaying;
+            }
+
+            getCurrentTime() {
+                if (this.mode === 'file') return this.audioEl.currentTime || 0;
+                return this.demoTime;
+            }
+
+            getDuration() {
+                if (this.mode === 'file') {
+                    return Number.isFinite(this.audioEl.duration) ? this.audioEl.duration : 0;
+                }
+                return this.demoDuration;
+            }
+
+            seekTo(seconds) {
+                const dur = this.getDuration();
+                const clamped = Math.max(0, Math.min(seconds, dur || 0));
+                if (this.mode === 'file') {
+                    if (Number.isFinite(this.audioEl.duration)) {
+                        this.audioEl.currentTime = clamped;
+                    }
+                } else {
+                    this.demoTime = clamped;
+                }
+            }
+
+            seekRelative(deltaSec) {
+                this.seekTo(this.getCurrentTime() + deltaSec);
+            }
+
+            // Built-in Dark Pop / Synthwave 124 BPM Real-Time Generator routed through Master Analyser
+            startDemoScheduler() {
+                this.stopDemoScheduler();
+                const stepMs = (60 / this.demoBpm / 4) * 1000; // 16th note
+                this.triggerDemoStep(this.demoStepIndex++);
+                this.demoTimer = setInterval(() => {
+                    if (!this.isPlaying || this.mode !== 'demo') return;
+                    this.triggerDemoStep(this.demoStepIndex++);
+                }, stepMs);
+            }
+
+            stopDemoScheduler() {
+                if (this.demoTimer) {
+                    clearInterval(this.demoTimer);
+                    this.demoTimer = null;
+                }
+            }
+
+            triggerDemoStep(step) {
+                if (!this.ctx || !this.masterGain) return;
+                const now = this.ctx.currentTime;
+                const s16 = step % 16;
+                const bar = Math.floor(step / 16) % 4;
+
+                // 1. Sub-heavy Club Kick (hits harder for vivid bass response)
+                if (s16 === 0 || s16 === 4 || s16 === 8 || s16 === 12 || (bar === 3 && s16 === 14)) {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(165, now);
+                    osc.frequency.exponentialRampToValueAtTime(34, now + 0.14);
+                    gain.gain.setValueAtTime(1.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.27);
+                    osc.connect(gain);
+                    gain.connect(this.masterGain);
+                    osc.start(now);
+                    osc.stop(now + 0.29);
+                }
+
+                // 2. Crisp Snare / Clap on 4 & 12
+                if (s16 === 4 || s16 === 12) {
+                    const bufSize = Math.floor(this.ctx.sampleRate * 0.14);
+                    const buffer = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.35));
+                    const noise = this.ctx.createBufferSource();
+                    noise.buffer = buffer;
+
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'bandpass';
+                    filter.frequency.value = 1850;
+                    filter.Q.value = 0.8;
+
+                    const gain = this.ctx.createGain();
+                    gain.gain.setValueAtTime(0.45, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+                    noise.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.masterGain);
+                    noise.start(now);
+                }
+
+                // 3. Hi-hat shimmer on off-beats
+                if (s16 % 2 === 1) {
+                    const bufSize = Math.floor(this.ctx.sampleRate * 0.045);
+                    const buffer = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.22));
+                    const src = this.ctx.createBufferSource();
+                    src.buffer = buffer;
+                    const hp = this.ctx.createBiquadFilter();
+                    hp.type = 'highpass';
+                    hp.frequency.value = 7200;
+                    const gain = this.ctx.createGain();
+                    gain.gain.value = s16 % 4 === 2 ? 0.18 : 0.11;
+                    src.connect(hp);
+                    hp.connect(gain);
+                    gain.connect(this.masterGain);
+                    src.start(now);
+                }
+
+                // 4. Driving Dark-Pop Bassline (A minor progression: A - F - G - E)
+                const bassRoots = [55.0, 43.65, 49.0, 41.20];
+                if (s16 % 2 === 0) {
+                    const osc = this.ctx.createOscillator();
+                    const filter = this.ctx.createBiquadFilter();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    const octaveBoost = (s16 === 6 || s16 === 14) ? 2 : 1;
+                    osc.frequency.setValueAtTime(bassRoots[bar] * octaveBoost, now);
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(620, now);
+                    filter.frequency.exponentialRampToValueAtTime(160, now + 0.14);
+                    gain.gain.setValueAtTime(0.28, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.masterGain);
+                    osc.start(now);
+                    osc.stop(now + 0.18);
+                }
+
+                // 5. Moody Lead Synth Pluck
+                const melodyPatterns = [
+                    [440, 0, 523.25, 0, 659.25, 0, 523.25, 440, 0, 392, 0, 440, 0, 523.25, 0, 0],
+                    [349.23, 0, 440, 0, 523.25, 0, 440, 349.23, 0, 329.63, 0, 349.23, 0, 440, 0, 0],
+                    [392, 0, 493.88, 0, 587.33, 0, 493.88, 392, 0, 349.23, 0, 392, 0, 493.88, 0, 0],
+                    [329.63, 0, 392, 0, 493.88, 0, 587.33, 523.25, 0, 493.88, 0, 440, 0, 392, 0, 0]
+                ];
+                const freq = melodyPatterns[bar][s16];
+                if (freq > 0) {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now);
+                    gain.gain.setValueAtTime(0.14, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+                    osc.connect(gain);
+                    gain.connect(this.masterGain);
+                    osc.start(now);
+                    osc.stop(now + 0.24);
+                }
+            }
+
+            /**
+             * Zero-GC Multi-Band FFT + Spectral Flux Kick/Snare Onset + Live BPM Estimator
+             */
+            analyzeFrame(nowMs, reactivity) {
+                const dt = Math.min(0.08, Math.max(0.001, (nowMs - (this.lastTickTimestamp || nowMs)) / 1000));
+                if (this.isPlaying && this.mode === 'demo') {
+                    this.demoTime += dt;
+                    if (this.demoTime >= this.demoDuration) this.demoTime = 0;
+                }
+                this.lastTickTimestamp = nowMs;
+
+                let rawBass = 0, rawMid = 0, rawHigh = 0;
+                let bassFlux = 0, midFlux = 0;
+
+                if (this.analyser && this.isPlaying) {
+                    this.prevFreqData.set(this.freqData);
+                    this.analyser.getByteFrequencyData(this.freqData);
+
+                    // Sub-Bass & Kick: bins 1..6 (~43Hz - 260Hz with fftSize=1024)
+                    let bSum = 0;
+                    for (let i = 1; i <= 6; i++) {
+                        const v = this.freqData[i];
+                        bSum += v;
+                        const diff = v - this.prevFreqData[i];
+                        if (diff > 0) bassFlux += diff;
+                    }
+                    rawBass = bSum / (6 * 255);
+                    bassFlux /= (6 * 255);
+
+                    // Mid & Snare Punch: bins 7..42 (~300Hz - 1.8kHz)
+                    let mSum = 0;
+                    for (let i = 7; i <= 42; i++) {
+                        const v = this.freqData[i];
+                        mSum += v;
+                        const diff = v - this.prevFreqData[i];
+                        if (diff > 0) midFlux += diff;
+                    }
+                    rawMid = mSum / (36 * 255);
+                    midFlux /= (36 * 255);
+
+                    // High & Air: bins 43..160 (~1.8kHz - 6.9kHz)
+                    let hSum = 0;
+                    for (let i = 43; i <= 160; i++) hSum += this.freqData[i];
+                    rawHigh = hSum / (118 * 255);
+
+                    // Adaptive circular buffer means (zero allocations)
+                    const kickSignal = rawBass + bassFlux * 1.15;
+                    const snareSignal = rawMid + midFlux * 1.35;
+
+                    let avgBass = 0, avgMid = 0;
+                    const n = Math.max(1, this.ringFilled);
+                    for (let i = 0; i < n; i++) {
+                        avgBass += this.bassRing[i];
+                        avgMid += this.midRing[i];
+                    }
+                    avgBass /= n;
+                    avgMid /= n;
+
+                    this.bassRing[this.ringIdx] = kickSignal;
+                    this.midRing[this.ringIdx] = snareSignal;
+                    this.ringIdx = (this.ringIdx + 1) % this.histLen;
+                    if (this.ringFilled < this.histLen) this.ringFilled++;
+
+                    // Punchy Kick / Beat Detection
+                    const minBeatGapMs = 235;
+                    if (kickSignal > avgBass * 1.22 && rawBass > 0.18 && (nowMs - this.lastBeatTimestamp) > minBeatGapMs) {
+                        const ibi = nowMs - this.lastBeatTimestamp;
+                        this.lastBeatTimestamp = nowMs;
+                        const strength = Math.min(1.4, 0.72 + rawBass * 0.75 + bassFlux * 0.9);
+                        this.beatPulse = Math.max(this.beatPulse, strength);
+                        this.beatPhase = (this.beatPhase + 1) % 4;
+
+                        // Launch optical refraction shockwave across Liquid Glass!
+                        this.shockwave = 0.0;
+                        this.shockAmp = Math.min(1.45, 0.65 + rawBass * 0.9);
+
+                        if (ibi >= 250 && ibi <= 1200) {
+                            let bpmSample = 60000 / ibi;
+                            while (bpmSample < 76) bpmSample *= 2;
+                            while (bpmSample > 178) bpmSample /= 2;
+
+                            this.ibiRing[this.ibiIdx] = bpmSample;
+                            this.ibiIdx = (this.ibiIdx + 1) % 12;
+                            if (this.ibiCount < 12) this.ibiCount++;
+
+                            // Copy & insertion-sort tiny fixed buffer (zero GC!)
+                            for (let k = 0; k < this.ibiCount; k++) this.ibiSorted[k] = this.ibiRing[k];
+                            for (let k = 1; k < this.ibiCount; k++) {
+                                const key = this.ibiSorted[k];
+                                let j = k - 1;
+                                while (j >= 0 && this.ibiSorted[j] > key) {
+                                    this.ibiSorted[j + 1] = this.ibiSorted[j];
+                                    j--;
+                                }
+                                this.ibiSorted[j + 1] = key;
+                            }
+                            const medianBpm = this.ibiSorted[Math.floor(this.ibiCount * 0.5)];
+                            this.estimatedBpm = this.estimatedBpm
+                                ? this.estimatedBpm * 0.72 + medianBpm * 0.28
+                                : medianBpm;
+                        }
+
+                        if (this.onBeatCallback) this.onBeatCallback(strength, this.beatPhase);
+                    }
+
+                    // Snare / Mid-Clap Hit Detection (adds secondary kinetic shimmer!)
+                    if (snareSignal > avgMid * 1.32 && rawMid > 0.16 && (nowMs - this.lastSnareTimestamp) > 190) {
+                        this.lastSnareTimestamp = nowMs;
+                        this.snarePulse = Math.min(1.2, 0.55 + rawMid * 0.8 + midFlux * 0.8);
+                        if (this.onSnareCallback) this.onSnareCallback(this.snarePulse);
+                    }
+                } else {
+                    for (let i = 0; i < this.freqData.length; i++) {
+                        this.freqData[i] = (this.freqData[i] * 0.82) | 0;
+                    }
+                }
+
+                // Advance optical shockwave smoothly across viewport
+                if (this.shockwave < 1.6) {
+                    this.shockwave += dt * 2.35;
+                    this.shockAmp *= Math.pow(0.18, dt);
+                } else {
+                    this.shockAmp = 0;
+                }
+
+                // Fast-attack, punchy-release envelopes
+                const bassAlpha = rawBass > this.smoothBass ? 0.62 : 0.22;
+                const midAlpha = rawMid > this.smoothMid ? 0.52 : 0.20;
+                const highAlpha = rawHigh > this.smoothHigh ? 0.55 : 0.22;
+                this.smoothBass += (rawBass - this.smoothBass) * bassAlpha;
+                this.smoothMid += (rawMid - this.smoothMid) * midAlpha;
+                this.smoothHigh += (rawHigh - this.smoothHigh) * highAlpha;
+                this.smoothEnergy = this.smoothBass * 0.52 + this.smoothMid * 0.30 + this.smoothHigh * 0.18;
+
+                // Frame-rate independent exponential beat decay
+                const beatDecay = Math.pow(0.014, dt);
+                this.beatPulse *= beatDecay;
+                this.snarePulse *= Math.pow(0.008, dt);
+
+                const m = this.metrics;
+                m.bass = this.smoothBass;
+                m.mid = this.smoothMid;
+                m.high = this.smoothHigh;
+                m.energy = this.smoothEnergy;
+                m.beat = this.beatPulse;
+                m.snare = this.snarePulse;
+                m.shockwave = this.shockwave;
+                m.shockAmp = this.shockAmp;
+                m.bpm = Math.round(this.estimatedBpm || 0);
+                m.beatPhase = this.beatPhase;
+                m.reactivity = reactivity;
+                return m;
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 3. PROCEDURAL NOIR DEFAULT ALBUM ARTWORK (ZERO BASE64 • ZERO BROKEN LINKS)
+         * ============================================================================
+         */
+        function generateDefaultCoverBlobUrl() {
+            return new Promise((resolve) => {
+                const cvs = document.createElement('canvas');
+                cvs.width = 720;
+                cvs.height = 720;
+                const ctx = cvs.getContext('2d');
+
+                // Deep Rainy Midnight Teal-Slate Sky (Matching the atmosphere of the reference cover)
+                const bg = ctx.createLinearGradient(0, 0, 720, 720);
+                bg.addColorStop(0, '#071b2a');
+                bg.addColorStop(0.45, '#0e2d3f');
+                bg.addColorStop(1, '#040a11');
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, 720, 720);
+
+                // Subtle Moonlight Haze
+                const moon = ctx.createRadialGradient(480, 210, 20, 480, 210, 320);
+                moon.addColorStop(0, 'rgba(120, 195, 225, 0.28)');
+                moon.addColorStop(0.5, 'rgba(20, 62, 92, 0.14)');
+                moon.addColorStop(1, 'transparent');
+                ctx.fillStyle = moon;
+                ctx.fillRect(0, 0, 720, 720);
+
+                // Streetlamp pole curving in left foreground
+                ctx.strokeStyle = '#04080e';
+                ctx.lineWidth = 22;
+                ctx.beginPath();
+                ctx.moveTo(110, 720);
+                ctx.quadraticCurveTo(30, 310, 118, 0);
+                ctx.stroke();
+
+                // Signature Crimson Neon Glitch / Slash Rune on upper-left
+                ctx.save();
+                ctx.strokeStyle = '#ff1a40';
+                ctx.shadowColor = '#ff1a40';
+                ctx.shadowBlur = 18;
+                ctx.lineWidth = 3.2;
+                const slashes = [
+                    [155, 290, 168, 410],
+                    [180, 260, 192, 435],
+                    [205, 235, 216, 420],
+                    [232, 220, 240, 360]
+                ];
+                slashes.forEach(([x1, y1, x2, y2]) => {
+                    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+                });
+                // Cross-cuts
+                ctx.lineWidth = 2.4;
+                ctx.beginPath();
+                ctx.moveTo(142, 345); ctx.lineTo(252, 275);
+                ctx.moveTo(146, 378); ctx.lineTo(246, 312);
+                ctx.stroke();
+                ctx.restore();
+
+                // Stylized Silhouette Figure Looking Up into the Night Rain
+                ctx.save();
+                // Flowing pale jacket draped at lower torso
+                const drapeGrad = ctx.createLinearGradient(190, 520, 380, 700);
+                drapeGrad.addColorStop(0, '#c8d7e4');
+                drapeGrad.addColorStop(0.5, '#6b8294');
+                drapeGrad.addColorStop(1, '#18242f');
+                ctx.fillStyle = drapeGrad;
+                ctx.beginPath();
+                ctx.moveTo(220, 560);
+                ctx.bezierCurveTo(175, 610, 170, 685, 235, 720);
+                ctx.lineTo(445, 720);
+                ctx.bezierCurveTo(430, 635, 360, 585, 300, 575);
+                ctx.closePath();
+                ctx.fill();
+
+                // Dark silhouette shoulders, neck & tilted head
+                ctx.fillStyle = '#070a10';
+                ctx.beginPath();
+                ctx.moveTo(295, 720);
+                ctx.lineTo(318, 520);
+                ctx.quadraticCurveTo(335, 470, 375, 455);
+                ctx.quadraticCurveTo(435, 465, 458, 550);
+                ctx.lineTo(485, 720);
+                ctx.closePath();
+                ctx.fill();
+
+                // Head & Hair
+                ctx.beginPath();
+                ctx.arc(365, 355, 74, 0, Math.PI * 2);
+                ctx.fill();
+                // Rim light along profile & jaw
+                ctx.strokeStyle = 'rgba(165, 215, 240, 0.65)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(368, 354, 72, -0.75, 0.85);
+                ctx.stroke();
+
+                // Hair strands
+                ctx.fillStyle = '#0b1018';
+                ctx.beginPath();
+                ctx.moveTo(290, 340);
+                ctx.quadraticCurveTo(255, 390, 275, 448);
+                ctx.quadraticCurveTo(315, 435, 338, 405);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+
+                // Crisp Static Rain Streaks
+                ctx.strokeStyle = 'rgba(185, 225, 245, 0.18)';
+                ctx.lineWidth = 1.4;
+                for (let i = 0; i < 65; i++) {
+                    const rx = (i * 73) % 720;
+                    const ry = (i * 137) % 720;
+                    const len = 26 + (i % 5) * 14;
+                    ctx.beginPath();
+                    ctx.moveTo(rx, ry);
+                    ctx.lineTo(rx - len * 0.22, ry + len);
+                    ctx.stroke();
+                }
+
+                // Vignette
+                const vig = ctx.createRadialGradient(360, 360, 180, 360, 360, 510);
+                vig.addColorStop(0, 'transparent');
+                vig.addColorStop(1, 'rgba(2, 6, 12, 0.52)');
+                ctx.fillStyle = vig;
+                ctx.fillRect(0, 0, 720, 720);
+
+                cvs.toBlob((blob) => {
+                    resolve(URL.createObjectURL(blob));
+                }, 'image/png');
+            });
+        }
+
+        /**
+         * ============================================================================
+         * 4. HIGH-FPS FOREGROUND VISUALIZERS (ZERO SHADOWBLUR • SHOCKWAVES • SPARKS)
+         * ============================================================================
+         */
+        class VisualizersRenderer {
+            constructor(ringCanvas, spectrumCanvas, bottomWaveCanvas) {
+                this.ringCanvas = ringCanvas;
+                this.ringCtx = ringCanvas.getContext('2d');
+                this.specCanvas = spectrumCanvas;
+                this.specCtx = spectrumCanvas.getContext('2d');
+                this.waveCanvas = bottomWaveCanvas;
+                this.waveCtx = bottomWaveCanvas.getContext('2d');
+
+                this.ringAngle = 0;
+                this.accentColor = '#ef1a2d';
+                this.accentRgbStr = '239, 26, 45';
+                this.isLightTheme = false;
+
+                this.barCount = 64;
+                this.barHeights = new Float32Array(this.barCount);
+                this.peakHeights = new Float32Array(this.barCount);
+                this.peakVel = new Float32Array(this.barCount);
+                this.binLookup = new Uint16Array(this.barCount);
+                for (let i = 0; i < this.barCount; i++) {
+                    const norm = i / (this.barCount - 1);
+                    this.binLookup[i] = Math.min(240, Math.floor(Math.pow(norm, 1.8) * 145) + 1);
+                }
+
+                // Pre-allocated expanding shockwave ring pool (zero GC!)
+                this.maxWaves = 6;
+                this.waveRadius = new Float32Array(this.maxWaves);
+                this.waveAlpha = new Float32Array(this.maxWaves);
+                this.waveCursor = 0;
+
+                // Pre-allocated crystalline beat-spark particle pool (zero GC!)
+                this.maxSparks = 52;
+                this.sparkX = new Float32Array(this.maxSparks);
+                this.sparkY = new Float32Array(this.maxSparks);
+                this.sparkVX = new Float32Array(this.maxSparks);
+                this.sparkVY = new Float32Array(this.maxSparks);
+                this.sparkLife = new Float32Array(this.maxSparks);
+                this.sparkSize = new Float32Array(this.maxSparks);
+                this.sparkAccent = new Uint8Array(this.maxSparks);
+                this.sparkCursor = 0;
+
+                this.dpr = 1;
+                this.resize();
+                window.addEventListener('resize', () => this.resize(), { passive: true });
+            }
+
+            setAccent(hex) {
+                this.accentColor = hex;
+                const clean = hex.replace('#', '');
+                const num = parseInt(clean, 16);
+                if (!Number.isNaN(num)) {
+                    this.accentRgbStr = `${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}`;
+                }
+            }
+
+            setTheme(isLight) {
+                this.isLightTheme = isLight;
+            }
+
+            /** Trigger expanding geometric shockwave + diamond spark burst on beat hit! */
+            triggerBeatBurst(strength) {
+                // Spawn expanding shockwave ring
+                const idx = this.waveCursor;
+                this.waveCursor = (this.waveCursor + 1) % this.maxWaves;
+                this.waveRadius[idx] = 0.0;
+                this.waveAlpha[idx] = Math.min(1.0, 0.55 + strength * 0.45);
+
+                // Burst 8-14 crystalline sparks radially from the astrolabe ring
+                const count = Math.min(14, Math.max(6, Math.floor(6 + strength * 8)));
+                for (let i = 0; i < count; i++) {
+                    const p = this.sparkCursor;
+                    this.sparkCursor = (this.sparkCursor + 1) % this.maxSparks;
+                    const ang = Math.random() * Math.PI * 2;
+                    const speed = 2.6 + Math.random() * 4.8 * strength;
+                    this.sparkX[p] = Math.cos(ang);
+                    this.sparkY[p] = Math.sin(ang);
+                    this.sparkVX[p] = Math.cos(ang) * speed;
+                    this.sparkVY[p] = Math.sin(ang) * speed;
+                    this.sparkLife[p] = 1.0;
+                    this.sparkSize[p] = 2.2 + Math.random() * 4.2;
+                    this.sparkAccent[p] = (i & 1) ? 1 : 0;
+                }
+            }
+
+            resize() {
+                // Cap 2D canvas DPR at 1.5 for blazing fast pixel fill-rate
+                this.dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+                const dpr = this.dpr;
+
+                const ringRect = this.ringCanvas.getBoundingClientRect();
+                this.ringCanvas.width = Math.max(10, Math.floor(ringRect.width * dpr));
+                this.ringCanvas.height = Math.max(10, Math.floor(ringRect.height * dpr));
+
+                const specRect = this.specCanvas.getBoundingClientRect();
+                this.specCanvas.width = Math.max(10, Math.floor(specRect.width * dpr));
+                this.specCanvas.height = Math.max(10, Math.floor(specRect.height * dpr));
+
+                this.waveCanvas.width = Math.max(10, Math.floor(window.innerWidth * dpr));
+                this.waveCanvas.height = Math.max(10, Math.floor(135 * dpr));
+            }
+
+            drawRing(metrics) {
+                const ctx = this.ringCtx;
+                const w = this.ringCanvas.width;
+                const h = this.ringCanvas.height;
+                const cx = w * 0.5;
+                const cy = h * 0.5;
+                const dpr = this.dpr;
+                const react = metrics.reactivity;
+                const rBase = Math.min(w, h) * 0.345 + (metrics.beat * 18 + metrics.bass * 12) * dpr * react;
+
+                ctx.clearRect(0, 0, w, h);
+
+                // Fierce beat-boosted rotation speed
+                this.ringAngle += 0.003 + metrics.energy * 0.028 * react + metrics.beat * 0.048 * react;
+
+                const ink = this.isLightTheme ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.94)';
+                const softInk = this.isLightTheme ? 'rgba(15, 23, 42, 0.32)' : 'rgba(255, 255, 255, 0.35)';
+
+                ctx.save();
+                ctx.translate(cx, cy);
+
+                // 1. Expanding Beat Shockwave Rings (Pure GPU vector stroke, zero shadowBlur)
+                for (let i = 0; i < this.maxWaves; i++) {
+                    if (this.waveAlpha[i] <= 0.02) continue;
+                    this.waveRadius[i] += (4.8 + metrics.energy * 4.5) * dpr;
+                    this.waveAlpha[i] *= 0.90;
+                    const rr = rBase * 0.98 + this.waveRadius[i];
+                    if (rr < Math.min(w, h) * 0.495) {
+                        ctx.strokeStyle = `rgba(${this.accentRgbStr}, ${(this.waveAlpha[i] * 0.78).toFixed(3)})`;
+                        ctx.lineWidth = (2.8 * this.waveAlpha[i] + 0.8) * dpr;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, rr, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                }
+
+                // 2. Crystalline Beat Sparks bursting outward
+                for (let i = 0; i < this.maxSparks; i++) {
+                    const life = this.sparkLife[i];
+                    if (life <= 0.03) continue;
+                    // On first frame, initialize at ring perimeter
+                    if (life === 1.0) {
+                        this.sparkX[i] *= rBase * 1.02;
+                        this.sparkY[i] *= rBase * 1.02;
+                    }
+                    this.sparkX[i] += this.sparkVX[i] * dpr;
+                    this.sparkY[i] += this.sparkVY[i] * dpr;
+                    this.sparkVX[i] *= 0.955;
+                    this.sparkVY[i] *= 0.955;
+                    this.sparkLife[i] = life * 0.91;
+
+                    const sz = this.sparkSize[i] * life * dpr;
+                    ctx.fillStyle = this.sparkAccent[i]
+                        ? `rgba(${this.accentRgbStr}, ${life.toFixed(2)})`
+                        : (this.isLightTheme ? `rgba(15,23,42,${life.toFixed(2)})` : `rgba(255,255,255,${life.toFixed(2)})`);
+                    ctx.beginPath();
+                    ctx.moveTo(this.sparkX[i], this.sparkY[i] - sz);
+                    ctx.lineTo(this.sparkX[i] + sz * 0.65, this.sparkY[i]);
+                    ctx.lineTo(this.sparkX[i], this.sparkY[i] + sz);
+                    ctx.lineTo(this.sparkX[i] - sz * 0.65, this.sparkY[i]);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+
+                // 3. Rotating Ornate Astrolabe + Intense Radial Frequency Spikes
+                ctx.save();
+                ctx.rotate(this.ringAngle);
+
+                ctx.strokeStyle = ink;
+                ctx.lineWidth = (1.6 + metrics.beat * 1.2) * dpr;
+                ctx.setLineDash([16 * dpr, 9 * dpr, 4 * dpr, 9 * dpr]);
+                ctx.beginPath();
+                ctx.arc(0, 0, rBase, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.setLineDash([]);
+                ctx.strokeStyle = softInk;
+                ctx.lineWidth = 1.1 * dpr;
+                ctx.beginPath();
+                ctx.arc(0, 0, rBase * 0.94, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Batch white & accent radial spikes into 2 single stroke calls (ultra-fast!)
+                const tickCount = 64;
+                const r1 = rBase * 1.01;
+                ctx.beginPath();
+                for (let i = 0; i < tickCount; i++) {
+                    const ang = (i / tickCount) * Math.PI * 2;
+                    const bin = (i * 2) + 1;
+                    const amp = (metrics.freqData[bin] || 0) / 255;
+                    const tickLen = (5 + amp * 38 * react + metrics.beat * 10 * react) * dpr;
+                    const r2 = r1 + tickLen;
+                    const ca = Math.cos(ang), sa = Math.sin(ang);
+                    ctx.moveTo(ca * r1, sa * r1);
+                    ctx.lineTo(ca * r2, sa * r2);
+                }
+                ctx.strokeStyle = ink;
+                ctx.lineWidth = 1.6 * dpr;
+                ctx.stroke();
+
+                // Accent outer tips for high-energy radial spikes
+                ctx.beginPath();
+                for (let i = 0; i < tickCount; i++) {
+                    const bin = (i * 2) + 1;
+                    const amp = (metrics.freqData[bin] || 0) / 255;
+                    if (amp < 0.34) continue;
+                    const ang = (i / tickCount) * Math.PI * 2;
+                    const tickLen = (5 + amp * 38 * react + metrics.beat * 10 * react) * dpr;
+                    const rStart = r1 + tickLen * 0.62;
+                    const rEnd = r1 + tickLen;
+                    const ca = Math.cos(ang), sa = Math.sin(ang);
+                    ctx.moveTo(ca * rStart, sa * rStart);
+                    ctx.lineTo(ca * rEnd, sa * rEnd);
+                }
+                ctx.strokeStyle = this.accentColor;
+                ctx.lineWidth = 2.4 * dpr;
+                ctx.stroke();
+
+                // 8 Ornate Diamond Stars (pulsing vigorously with beat + snare)
+                for (let i = 0; i < 8; i++) {
+                    const ang = (i / 8) * Math.PI * 2;
+                    const dist = rBase * (i % 2 === 0 ? 1.07 : 1.02);
+                    const sx = Math.cos(ang) * dist;
+                    const sy = Math.sin(ang) * dist;
+                    const starSize = (i % 2 === 0 ? 10.5 : 7) * dpr * (1 + metrics.beat * 0.55 * react + metrics.snare * 0.25);
+
+                    ctx.save();
+                    ctx.translate(sx, sy);
+                    ctx.rotate(ang + Math.PI / 4);
+                    if (i % 2 === 0 && metrics.beat > 0.25) {
+                        // Fast soft halo without shadowBlur
+                        ctx.fillStyle = `rgba(${this.accentRgbStr}, ${(metrics.beat * 0.38).toFixed(2)})`;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, starSize * 1.4, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = this.accentColor;
+                    } else {
+                        ctx.fillStyle = ink;
+                    }
+                    ctx.beginPath();
+                    ctx.moveTo(0, -starSize);
+                    ctx.lineTo(starSize * 0.42, -starSize * 0.42);
+                    ctx.lineTo(starSize, 0);
+                    ctx.lineTo(starSize * 0.42, starSize * 0.42);
+                    ctx.lineTo(0, starSize);
+                    ctx.lineTo(-starSize * 0.42, starSize * 0.42);
+                    ctx.lineTo(-starSize, 0);
+                    ctx.lineTo(-starSize * 0.42, -starSize * 0.42);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.restore();
+                }
+                ctx.restore();
+
+                // 4. Counter-rotating High-Energy Accent Arcs
+                ctx.save();
+                ctx.rotate(-this.ringAngle * 0.85);
+                ctx.strokeStyle = this.accentColor;
+                ctx.globalAlpha = Math.min(1, 0.32 + metrics.beat * 0.68 + metrics.snare * 0.35);
+                ctx.lineWidth = (2.4 + metrics.beat * 2.4) * dpr;
+                for (let a = 0; a < 4; a++) {
+                    const start = a * (Math.PI / 2) + 0.2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, rBase * (1.12 + metrics.snare * 0.04), start, start + 0.65);
+                    ctx.stroke();
+                }
+                ctx.restore();
+
+                ctx.restore();
+            }
+
+            drawHangingSpectrum(metrics) {
+                const ctx = this.specCtx;
+                const w = this.specCanvas.width;
+                const h = this.specCanvas.height;
+                const dpr = this.dpr;
+
+                ctx.clearRect(0, 0, w, h);
+
+                const count = this.barCount;
+                const gap = 2.2 * dpr;
+                const barW = Math.max(2 * dpr, (w - gap * (count - 1)) / count);
+                const maxBarH = h - 8 * dpr;
+                const primaryColor = this.isLightTheme ? '#0f172a' : '#ffffff';
+                const react = metrics.reactivity;
+
+                // Subtle glowing top energy ribbon hugging the progress bar
+                if (metrics.energy > 0.05) {
+                    ctx.fillStyle = `rgba(${this.accentRgbStr}, ${Math.min(0.45, metrics.beat * 0.35 + metrics.energy * 0.22).toFixed(3)})`;
+                    ctx.fillRect(0, 0, w, (3 + metrics.beat * 6) * dpr);
+                }
+
+                // Pass 1: Update heights & draw crisp white hanging shafts (zero shadowBlur!)
+                ctx.fillStyle = primaryColor;
+                for (let i = 0; i < count; i++) {
+                    const norm = i / (count - 1);
+                    const rawVal = (metrics.freqData[this.binLookup[i]] || 0) / 255;
+
+                    // Punchy bass excursion on the left + beat boost across the curve
+                    const shapeWeight = 1.28 - norm * 0.36;
+                    const beatLift = (1.0 - norm * 0.65) * metrics.beat * 0.22;
+                    const targetH = Math.min(maxBarH, Math.max(4 * dpr, (rawVal * shapeWeight + beatLift) * maxBarH * react));
+
+                    // Ultra-snappy attack, elastic release
+                    this.barHeights[i] += (targetH - this.barHeights[i]) * (targetH > this.barHeights[i] ? 0.72 : 0.22);
+
+                    // Bouncy gravity peak-hold cap
+                    if (this.barHeights[i] >= this.peakHeights[i]) {
+                        this.peakHeights[i] = this.barHeights[i];
+                        this.peakVel[i] = 0;
+                    } else {
+                        this.peakVel[i] += 0.14 * dpr;
+                        this.peakHeights[i] = Math.max(this.barHeights[i], this.peakHeights[i] - this.peakVel[i]);
+                    }
+
+                    const bh = this.barHeights[i];
+                    const capH = Math.min(bh, Math.max(4.5 * dpr, bh * 0.25));
+                    ctx.fillRect(i * (barW + gap), 0, barW, Math.max(0, bh - capH));
+                }
+
+                // Pass 2: Draw vivid crimson accent tips & floating peak caps in one batched fillStyle
+                ctx.fillStyle = this.accentColor;
+                for (let i = 0; i < count; i++) {
+                    const x = i * (barW + gap);
+                    const bh = this.barHeights[i];
+                    const ph = this.peakHeights[i];
+                    const capH = Math.min(bh, Math.max(4.5 * dpr, bh * 0.25));
+                    ctx.fillRect(x, Math.max(0, bh - capH), barW, capH);
+                    if (ph > bh + 2 * dpr) {
+                        ctx.fillRect(x, ph, barW, 2.8 * dpr);
+                    }
+                }
+
+                // Pass 3: Fast additive glow pass ONLY on high-energy bars (10x faster than shadowBlur!)
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.fillStyle = `rgba(${this.accentRgbStr}, 0.26)`;
+                const pad = 1.8 * dpr;
+                for (let i = 0; i < count; i++) {
+                    const bh = this.barHeights[i];
+                    if (bh < maxBarH * 0.26) continue;
+                    const x = i * (barW + gap);
+                    const capH = Math.min(bh, Math.max(6 * dpr, bh * 0.34));
+                    ctx.fillRect(x - pad, Math.max(0, bh - capH), barW + pad * 2, capH + pad);
+                }
+                ctx.restore();
+            }
+
+            drawBottomWaves(metrics, nowMs) {
+                const ctx = this.waveCtx;
+                const w = this.waveCanvas.width;
+                const h = this.waveCanvas.height;
+                const dpr = this.dpr;
+                const react = metrics.reactivity;
+
+                ctx.clearRect(0, 0, w, h);
+
+                const t = nowMs * 0.0026;
+                const bassAmp = (16 + metrics.bass * 86 * react + metrics.beat * 44 * react) * dpr;
+                const midAmp = (16 + metrics.mid * 82 * react + metrics.snare * 42 * react + metrics.high * 34 * react) * dpr;
+                const steps = 48;
+
+                // Left White Bass Wave Hill with live FFT micro-contour
+                ctx.beginPath();
+                ctx.moveTo(0, h);
+                for (let i = 0; i <= steps; i++) {
+                    const p = i / steps;
+                    const x = p * w * 0.58;
+                    const env = Math.pow(Math.sin(p * Math.PI), 1.75);
+                    const fftLift = ((metrics.freqData[1 + (i % 12)] || 0) / 255) * 0.32;
+                    const ripple = Math.sin(p * 6.5 + t * 2.6) * 0.16 + 0.84 + fftLift;
+                    const y = Math.max(6 * dpr, h - 4 * dpr - env * bassAmp * ripple);
+                    ctx.lineTo(x, y);
+                }
+                ctx.lineTo(w * 0.58, h);
+                ctx.closePath();
+
+                // Fast soft aura layer (replaces expensive shadowBlur)
+                ctx.fillStyle = this.isLightTheme ? 'rgba(15, 23, 42, 0.16)' : 'rgba(255, 255, 255, 0.20)';
+                ctx.save();
+                ctx.translate(0, -4 * dpr);
+                ctx.fill();
+                ctx.restore();
+
+                ctx.fillStyle = this.isLightTheme ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.95)';
+                ctx.fill();
+
+                // Right Crimson Accent Wave Hill with live Mid/Snare contour
+                ctx.beginPath();
+                ctx.moveTo(w * 0.44, h);
+                for (let i = 0; i <= steps; i++) {
+                    const p = i / steps;
+                    const x = w * 0.44 + p * w * 0.56;
+                    const env = Math.pow(Math.sin(p * Math.PI), 1.7);
+                    const fftLift = ((metrics.freqData[12 + (i % 24)] || 0) / 255) * 0.35;
+                    const ripple = Math.cos(p * 6.0 - t * 3.0) * 0.18 + 0.82 + fftLift;
+                    const y = Math.max(6 * dpr, h - 4 * dpr - env * midAmp * ripple);
+                    ctx.lineTo(x, y);
+                }
+                ctx.lineTo(w, h);
+                ctx.closePath();
+
+                // Fast glowing aura + solid core
+                ctx.fillStyle = `rgba(${this.accentRgbStr}, ${(0.24 + metrics.beat * 0.26).toFixed(2)})`;
+                ctx.save();
+                ctx.translate(0, (-5 - metrics.beat * 6) * dpr);
+                ctx.fill();
+                ctx.restore();
+
+                ctx.fillStyle = this.accentColor;
+                ctx.fill();
+
+                // Crisp Thin Bottom Baseline
+                ctx.fillStyle = this.isLightTheme ? 'rgba(15, 23, 42, 0.35)' : 'rgba(255, 255, 255, 0.78)';
+                ctx.fillRect(0, h - 3 * dpr, w, 3 * dpr);
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 5. MAIN APPLICATION CONTROLLER & REAL-TIME LOOP
+         * ============================================================================
+         */
+        function formatTime(sec) {
+            if (!Number.isFinite(sec) || sec < 0) return '0:00';
+            const total = Math.floor(sec);
+            const mins = Math.floor(total / 60);
+            const secs = total % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'liquid-surface liquid-toast rounded-2xl px-4 py-3 text-xs font-semibold pointer-events-auto transition-all duration-300 translate-y-3 opacity-0 flex items-center gap-2.5';
+            const dot = document.createElement('span');
+            dot.className = 'w-2 h-2 rounded-full shrink-0';
+            dot.style.backgroundColor = 'var(--accent)';
+            const label = document.createElement('span');
+            label.textContent = message;
+            toast.append(dot, label);
+            container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.remove('translate-y-3', 'opacity-0'));
+            setTimeout(() => {
+                toast.classList.add('translate-y-3', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        window.onload = async function () {
+            const els = {
+                opticalCanvas: document.getElementById('optical-canvas'),
+                ringCanvas: document.getElementById('ring-canvas'),
+                spectrumCanvas: document.getElementById('spectrum-canvas'),
+                bottomWaveCanvas: document.getElementById('bottom-wave-canvas'),
+                audioEl: document.getElementById('audio-element'),
+                coverInput: document.getElementById('cover-file-input'),
+                audioInput: document.getElementById('audio-file-input'),
+                mainStage: document.getElementById('main-player-stage'),
+                stageBeatRim: document.getElementById('stage-beat-rim'),
+                coverDropZone: document.getElementById('cover-drop-zone'),
+                coverBeatRim: document.getElementById('cover-beat-rim'),
+                coverGlassSheen: document.getElementById('cover-glass-sheen'),
+                coverImg: document.getElementById('cover-image'),
+                coverOverlayTop: document.getElementById('cover-overlay-top'),
+                coverOverlayBottom: document.getElementById('cover-overlay-bottom'),
+                coverHeartIcon: document.getElementById('cover-heart-icon'),
+                coverBatteryFill: document.getElementById('cover-battery-fill'),
+                titleDisplay: document.getElementById('track-title-display'),
+                titleFirstChar: document.getElementById('title-first-char'),
+                titleRestChars: document.getElementById('title-rest-chars'),
+                channelDisplay: document.getElementById('channel-name-display'),
+                timeCurrent: document.getElementById('time-current'),
+                timeDuration: document.getElementById('time-duration'),
+                progressTrack: document.getElementById('progress-track'),
+                progressFill: document.getElementById('progress-fill'),
+                btnPlayPause: document.getElementById('btn-play-pause'),
+                iconPlay: document.getElementById('icon-play'),
+                iconPause: document.getElementById('icon-pause'),
+                btnRewind: document.getElementById('btn-rewind'),
+                btnForward: document.getElementById('btn-forward'),
+                btnMute: document.getElementById('btn-mute'),
+                iconVolOn: document.getElementById('icon-vol-on'),
+                iconVolOff: document.getElementById('icon-vol-off'),
+                volumeSlider: document.getElementById('volume-slider'),
+                quickUploadCover: document.getElementById('quick-upload-cover-btn'),
+                quickUploadAudio: document.getElementById('quick-upload-audio-btn'),
+                toggleOverdriveBtn: document.getElementById('toggle-overdrive-btn'),
+                overdriveLabel: document.getElementById('overdrive-label'),
+                toggleDemoBtn: document.getElementById('toggle-demo-btn'),
+                sourceModeDot: document.getElementById('source-mode-dot'),
+                sourceModeLabel: document.getElementById('source-mode-label'),
+                audioFilenamePill: document.getElementById('audio-filename-pill'),
+                openDrawerBtn: document.getElementById('open-drawer-btn'),
+                closeDrawerBtn: document.getElementById('close-drawer-btn'),
+                drawer: document.getElementById('studio-drawer'),
+                drawerBackdrop: document.getElementById('studio-drawer-backdrop'),
+                drawerUploadCover: document.getElementById('drawer-upload-cover'),
+                drawerUploadAudio: document.getElementById('drawer-upload-audio'),
+                inputTitle: document.getElementById('input-track-title'),
+                inputChannel: document.getElementById('input-channel-name'),
+                sliderBaseIOR: document.getElementById('slider-base-ior'),
+                valBaseIOR: document.getElementById('val-base-ior'),
+                sliderReactivity: document.getElementById('slider-reactivity'),
+                valReactivity: document.getElementById('val-reactivity'),
+                toggleCoverIcons: document.getElementById('toggle-cover-icons'),
+                presentationBtn: document.getElementById('presentation-btn'),
+                exitPresentationBtn: document.getElementById('exit-presentation-btn'),
+                hudBpm: document.getElementById('hud-bpm'),
+                hudIor: document.getElementById('hud-ior'),
+                hudFps: document.getElementById('hud-fps'),
+                badgeBpm: document.getElementById('badge-bpm'),
+                badgeEnergy: document.getElementById('badge-energy'),
+                beatStatusText: document.getElementById('beat-status-text'),
+                livePulseOrb: document.getElementById('live-pulse-orb'),
+                beatDots: Array.from(document.querySelectorAll('#beat-dots .beat-dot')),
+                miniBarBass: document.getElementById('mini-bar-bass'),
+                miniBarMid: document.getElementById('mini-bar-mid'),
+                miniBarHigh: document.getElementById('mini-bar-high'),
+                monBass: document.getElementById('mon-bass'),
+                monMid: document.getElementById('mon-mid'),
+                monHigh: document.getElementById('mon-high'),
+                barMonBass: document.getElementById('bar-mon-bass'),
+                barMonMid: document.getElementById('bar-mon-mid'),
+                barMonHigh: document.getElementById('bar-mon-high')
+            };
+
+            const opticalEngine = new AudioReactiveLiquidGlassEngine(els.opticalCanvas);
+            const audioEngine = new RealtimeAudioStudioEngine(els.audioEl);
+            const visualizers = new VisualizersRenderer(els.ringCanvas, els.spectrumCanvas, els.bottomWaveCanvas);
+
+            const appState = {
+                reactivity: 1.55,
+                overdrive: true,
+                uploadedFileName: null,
+                hasCustomTitle: false,
+                coverObjectUrl: null,
+                stageKickVel: 0,
+                stageKickPos: 0,
+                coverTilt: 0
+            };
+
+            // Load Procedural Noir Default Cover (zero external dependency)
+            const defaultCoverUrl = await generateDefaultCoverBlobUrl();
+            appState.coverObjectUrl = defaultCoverUrl;
+            els.coverImg.src = defaultCoverUrl;
+            els.coverImg.onload = () => {
+                opticalEngine.setCoverImage(els.coverImg);
+            };
+
+            // Beat Trigger -> Drives Liquid Glass Shockwave, Elastic Meniscus, Ring Burst & Kinetic Punch!
+            audioEngine.onBeatCallback = (strength, beatPhase) => {
+                const mult = appState.overdrive ? 1.35 : 0.85;
+                const power = strength * appState.reactivity * mult;
+                opticalEngine.triggerElasticImpulse(Math.min(1.45, 0.55 + power * 0.55));
+                visualizers.triggerBeatBurst(Math.min(1.6, power * 0.85));
+                appState.stageKickVel += Math.min(0.45, power * 0.20);
+                appState.coverTilt = (beatPhase % 2 === 0 ? 1 : -1) * Math.min(2.2, power * 0.95);
+                els.beatDots.forEach((dot, idx) => dot.classList.toggle('is-lit', idx === beatPhase));
+            };
+
+            audioEngine.onSnareCallback = (snareLevel) => {
+                const mult = appState.overdrive ? 1.25 : 0.75;
+                opticalEngine.triggerElasticImpulse(Math.min(0.85, snareLevel * 0.42 * appState.reactivity * mult));
+            };
+
+            // Sync Play/Pause Icon
+            function syncPlayUI() {
+                els.iconPlay.classList.toggle('hidden', audioEngine.isPlaying);
+                els.iconPause.classList.toggle('hidden', !audioEngine.isPlaying);
+            }
+
+            // Update Dual-Tone Track Title (1st char crisp white, rest vivid accent color)
+            function updateTrackTitle(text) {
+                const clean = (text || 'Untitled').trim() || 'Untitled';
+                els.titleFirstChar.textContent = clean.charAt(0);
+                els.titleRestChars.textContent = clean.slice(1);
+                els.inputTitle.value = clean;
+            }
+
+            function updateChannelName(text) {
+                const clean = (text || 'Yukii Music').trim() || 'Yukii Music';
+                els.channelDisplay.textContent = clean;
+                els.inputChannel.value = clean;
+            }
+
+            function hexToRgba(hex, alpha) {
+                const clean = hex.replace('#', '');
+                const num = parseInt(clean, 16);
+                const r = (num >> 16) & 255;
+                const g = (num >> 8) & 255;
+                const b = num & 255;
+                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            }
+
+            function setAccentColor(hex) {
+                document.documentElement.style.setProperty('--accent', hex);
+                document.documentElement.style.setProperty('--accent-glow', hexToRgba(hex, 0.55));
+                document.documentElement.style.setProperty('--accent-soft', hexToRgba(hex, 0.22));
+                els.livePulseOrb.style.backgroundColor = hex;
+                els.livePulseOrb.style.boxShadow = `0 0 14px ${hex}`;
+                els.miniBarMid.style.backgroundColor = hex;
+                els.barMonMid.style.backgroundColor = hex;
+                opticalEngine.setAccentHex(hex);
+                visualizers.setAccent(hex);
+            }
+
+            // Cover Image Upload Handler
+            function handleCoverFile(file) {
+                if (!file || !file.type.startsWith('image/')) {
+                    showToast('Vui lòng chọn tệp ảnh hợp lệ (PNG, JPG, WebP).');
+                    return;
+                }
+                if (appState.coverObjectUrl) URL.revokeObjectURL(appState.coverObjectUrl);
+                appState.coverObjectUrl = URL.createObjectURL(file);
+                els.coverImg.src = appState.coverObjectUrl;
+                els.coverImg.onload = () => {
+                    opticalEngine.setCoverImage(els.coverImg);
+                    opticalEngine.triggerElasticImpulse(0.75);
+                };
+                showToast('Đã cập nhật ảnh bìa mới!');
+            }
+
+            // Audio File Upload Handler
+            async function handleAudioFile(file) {
+                if (!file || !file.type.startsWith('audio/')) {
+                    showToast('Vui lòng chọn tệp âm thanh hợp lệ (MP3, WAV, OGG, FLAC, M4A).');
+                    return;
+                }
+                appState.uploadedFileName = file.name;
+                audioEngine.loadAudioFile(file);
+
+                // Auto-fill clean title from filename if user hasn't manually typed one
+                const baseName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
+                if (!appState.hasCustomTitle && baseName) {
+                    updateTrackTitle(baseName);
+                }
+
+                els.sourceModeLabel.textContent = 'File nhạc của bạn';
+                els.sourceModeDot.className = 'w-1.5 h-1.5 rounded-full bg-rose-400';
+                els.audioFilenamePill.textContent = file.name;
+                els.toggleDemoBtn.classList.add('is-active');
+
+                try {
+                    await audioEngine.play();
+                    syncPlayUI();
+                    showToast(`Đang phát: ${file.name}`);
+                } catch {
+                    syncPlayUI();
+                    showToast('Đã nạp file nhạc! Nhấn nút Play để bắt đầu.');
+                }
+            }
+
+            // Handle <audio> ended -> loop gracefully
+            els.audioEl.addEventListener('ended', () => {
+                els.audioEl.currentTime = 0;
+                els.audioEl.play().catch(() => {});
+            });
+
+            // Drawer Open/Close
+            function openDrawer() {
+                els.drawer.classList.add('is-open');
+                els.drawerBackdrop.classList.add('is-open');
+                els.drawer.setAttribute('aria-hidden', 'false');
+                requestAnimationFrame(() => opticalEngine.cacheLensElements());
+                setTimeout(() => opticalEngine.cacheLensElements(), 400);
+            }
+            function closeDrawer() {
+                els.drawer.classList.remove('is-open');
+                els.drawerBackdrop.classList.remove('is-open');
+                els.drawer.setAttribute('aria-hidden', 'true');
+                setTimeout(() => opticalEngine.cacheLensElements(), 400);
+            }
+
+            function toggleOverdrive() {
+                appState.overdrive = !appState.overdrive;
+                els.toggleOverdriveBtn.classList.toggle('is-active', appState.overdrive);
+                els.overdriveLabel.textContent = appState.overdrive ? 'Overdrive ON' : 'Balanced';
+                opticalEngine.triggerElasticImpulse(appState.overdrive ? 0.85 : 0.3);
+                showToast(appState.overdrive
+                    ? 'Chế độ Overdrive: Phản ứng nhịp & sóng xung kích cực đại!'
+                    : 'Chế độ Cân bằng: Phản ứng mượt mà tiêu chuẩn.');
+            }
+
+            // Presentation Mode Toggle
+            function togglePresentationMode() {
+                const active = document.body.classList.toggle('presentation-mode');
+                els.exitPresentationBtn.classList.toggle('hidden', !active);
+                if (active) closeDrawer();
+                setTimeout(() => opticalEngine.cacheLensElements(), 260);
+            }
+
+            // Event Listeners
+            els.btnPlayPause.addEventListener('click', () => {
+                audioEngine.togglePlay();
+                syncPlayUI();
+                opticalEngine.triggerElasticImpulse(0.5);
+            });
+            els.btnRewind.addEventListener('click', () => {
+                audioEngine.seekRelative(-10);
+                opticalEngine.triggerElasticImpulse(0.35);
+            });
+            els.btnForward.addEventListener('click', () => {
+                audioEngine.seekRelative(10);
+                opticalEngine.triggerElasticImpulse(0.35);
+            });
+
+            // Seekable Progress Track (Mouse & Touch)
+            let isSeeking = false;
+            const seekFromClientX = (clientX) => {
+                const rect = els.progressTrack.getBoundingClientRect();
+                const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(rect.width, 1)));
+                const dur = audioEngine.getDuration();
+                if (dur > 0) audioEngine.seekTo(ratio * dur);
+            };
+            els.progressTrack.addEventListener('pointerdown', (e) => {
+                isSeeking = true;
+                els.progressTrack.setPointerCapture?.(e.pointerId);
+                seekFromClientX(e.clientX);
+            });
+            els.progressTrack.addEventListener('pointermove', (e) => {
+                if (isSeeking) seekFromClientX(e.clientX);
+            });
+            const stopSeek = () => { isSeeking = false; };
+            els.progressTrack.addEventListener('pointerup', stopSeek);
+            els.progressTrack.addEventListener('pointercancel', stopSeek);
+
+            // Volume & Mute
+            els.volumeSlider.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                audioEngine.isMuted = val === 0;
+                audioEngine.setVolume(val);
+                els.iconVolOn.classList.toggle('hidden', audioEngine.isMuted);
+                els.iconVolOff.classList.toggle('hidden', !audioEngine.isMuted);
+            });
+            els.btnMute.addEventListener('click', () => {
+                const muted = audioEngine.toggleMute();
+                els.iconVolOn.classList.toggle('hidden', muted);
+                els.iconVolOff.classList.toggle('hidden', !muted);
+            });
+
+            // Upload Triggers
+            els.toggleOverdriveBtn.addEventListener('click', toggleOverdrive);
+            els.quickUploadCover.addEventListener('click', () => els.coverInput.click());
+            els.drawerUploadCover.addEventListener('click', () => els.coverInput.click());
+            els.coverDropZone.addEventListener('click', () => els.coverInput.click());
+            els.coverInput.addEventListener('change', (e) => {
+                if (e.target.files?.[0]) handleCoverFile(e.target.files[0]);
+                e.target.value = '';
+            });
+
+            els.quickUploadAudio.addEventListener('click', () => els.audioInput.click());
+            els.drawerUploadAudio.addEventListener('click', () => els.audioInput.click());
+            els.audioInput.addEventListener('change', (e) => {
+                if (e.target.files?.[0]) handleAudioFile(e.target.files[0]);
+                e.target.value = '';
+            });
+
+            // Switch between Demo Beat & Uploaded File
+            els.toggleDemoBtn.addEventListener('click', () => {
+                if (audioEngine.mode === 'file') {
+                    audioEngine.switchToDemo();
+                    els.sourceModeLabel.textContent = 'Nhạc mẫu 124 BPM';
+                    els.sourceModeDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400';
+                    els.audioFilenamePill.textContent = 'Built-in Synth Track';
+                    showToast('Đã chuyển sang nhịp nhạc mẫu 124 BPM.');
+                } else if (appState.uploadedFileName) {
+                    audioEngine.stopDemoScheduler();
+                    audioEngine.mode = 'file';
+                    audioEngine.resetBeatStats();
+                    if (audioEngine.isPlaying) audioEngine.audioEl.play().catch(() => {});
+                    els.sourceModeLabel.textContent = 'File nhạc của bạn';
+                    els.sourceModeDot.className = 'w-1.5 h-1.5 rounded-full bg-rose-400';
+                    els.audioFilenamePill.textContent = appState.uploadedFileName;
+                    showToast(`Đã quay lại file: ${appState.uploadedFileName}`);
+                } else {
+                    els.audioInput.click();
+                }
+            });
+
+            // Drag & Drop Cover Image or Audio File Anywhere
+            ['dragenter', 'dragover'].forEach(evt => {
+                window.addEventListener(evt, (e) => {
+                    e.preventDefault();
+                    els.coverDropZone.classList.add('is-dragover');
+                });
+            });
+            ['dragleave', 'drop'].forEach(evt => {
+                window.addEventListener(evt, (e) => {
+                    e.preventDefault();
+                    els.coverDropZone.classList.remove('is-dragover');
+                });
+            });
+            window.addEventListener('drop', (e) => {
+                const file = e.dataTransfer?.files?.[0];
+                if (!file) return;
+                if (file.type.startsWith('image/')) handleCoverFile(file);
+                else if (file.type.startsWith('audio/')) handleAudioFile(file);
+                else showToast('Hãy thả tệp ảnh bìa hoặc tệp âm thanh!');
+            });
+
+            // Inline Edit Click -> Focuses Drawer Input seamlessly
+            els.titleDisplay.addEventListener('click', () => {
+                openDrawer();
+                setTimeout(() => { els.inputTitle.focus(); els.inputTitle.select(); }, 180);
+            });
+            els.channelDisplay.addEventListener('click', () => {
+                openDrawer();
+                setTimeout(() => { els.inputChannel.focus(); els.inputChannel.select(); }, 180);
+            });
+
+            els.inputTitle.addEventListener('input', (e) => {
+                appState.hasCustomTitle = true;
+                updateTrackTitle(e.target.value);
+            });
+            els.inputChannel.addEventListener('input', (e) => {
+                updateChannelName(e.target.value);
+            });
+
+            // Drawer Controls
+            els.openDrawerBtn.addEventListener('click', openDrawer);
+            els.closeDrawerBtn.addEventListener('click', closeDrawer);
+            els.drawerBackdrop.addEventListener('click', closeDrawer);
+
+            // Static Backdrop Switcher
+            document.querySelectorAll('.backdrop-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const mode = btn.dataset.backdrop;
+                    document.querySelectorAll('.backdrop-btn').forEach(b => b.classList.toggle('is-active', b === btn));
+                    const isLight = mode === 'studio-light';
+                    document.body.classList.toggle('theme-light', isLight);
+                    visualizers.setTheme(isLight);
+                    opticalEngine.setBackdropMode(mode);
+                    showToast(
+                        mode === 'noir' ? 'Nền tĩnh: Đêm Noir' :
+                        mode === 'cover' ? 'Nền tĩnh: Ảnh Bìa Khúc Xạ' : 'Nền tĩnh: Studio Sáng'
+                    );
+                });
+            });
+
+            // Accent Color Switcher
+            document.querySelectorAll('.accent-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.accent-btn').forEach(b => b.classList.toggle('is-active', b === btn));
+                    setAccentColor(btn.dataset.accent);
+                    opticalEngine.triggerElasticImpulse(0.45);
+                });
+            });
+
+            // Optical Parameters
+            els.sliderBaseIOR.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                els.valBaseIOR.textContent = v.toFixed(2);
+                opticalEngine.setBaseIOR(v);
+            });
+            els.sliderReactivity.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                appState.reactivity = v;
+                els.valReactivity.textContent = `${Math.round(v * 100)}%`;
+            });
+            els.toggleCoverIcons.addEventListener('change', (e) => {
+                const show = e.target.checked;
+                els.coverOverlayTop.classList.toggle('hidden', !show);
+                els.coverOverlayBottom.classList.toggle('hidden', !show);
+            });
+
+            els.presentationBtn.addEventListener('click', togglePresentationMode);
+            els.exitPresentationBtn.addEventListener('click', togglePresentationMode);
+
+            // Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    audioEngine.togglePlay();
+                    syncPlayUI();
+                } else if (e.code === 'ArrowLeft') {
+                    audioEngine.seekRelative(-5);
+                } else if (e.code === 'ArrowRight') {
+                    audioEngine.seekRelative(5);
+                } else if (e.key === 'h' || e.key === 'H') {
+                    togglePresentationMode();
+                } else if (e.key === 'o' || e.key === 'O') {
+                    toggleOverdrive();
+                } else if (e.key === 'm' || e.key === 'M') {
+                    const muted = audioEngine.toggleMute();
+                    els.iconVolOn.classList.toggle('hidden', muted);
+                    els.iconVolOff.classList.toggle('hidden', !muted);
+                } else if (e.key === 'Escape') {
+                    closeDrawer();
+                }
+            });
+
+            // Main 60-120FPS GPU-Optimized Real-Time Audio-Reactive Loop
+            // Zero global CSS variable writes & zero per-frame DOM layout reflows!
+            let frameCounter = 0;
+            let fpsFrames = 0;
+            let fpsLastTime = performance.now();
+            let lastTimeText = '';
+            let lastDurText = '';
+
+            function animate(nowMs) {
+                const effReact = appState.reactivity * (appState.overdrive ? 1.28 : 0.88);
+                const metrics = audioEngine.analyzeFrame(nowMs, effReact);
+
+                // Kinetic spring physics for intense stage & cover beat recoil
+                appState.stageKickVel = (appState.stageKickVel - appState.stageKickPos * 0.28) * 0.72;
+                appState.stageKickPos += appState.stageKickVel;
+                appState.coverTilt *= 0.84;
+
+                const beatAmt = Math.min(1.6, metrics.beat * effReact);
+                const bassAmt = Math.min(1.5, metrics.bass * effReact);
+                const highAmt = Math.min(1.5, (metrics.high + metrics.snare * 0.6) * effReact);
+
+                // 1. Render WebGL Liquid Glass Lenses + Acoustic Shockwaves over Static Backdrop
+                const liveIOR = opticalEngine.render(metrics) || opticalEngine.baseIOR;
+
+                // 2. Render Foreground Audio Visualizers (Ring, Hanging Spectrum, Bottom Dual Waves)
+                visualizers.drawRing(metrics);
+                visualizers.drawHangingSpectrum(metrics);
+                visualizers.drawBottomWaves(metrics, nowMs);
+
+                // 3. Direct GPU-Composited Kinetic Transforms & Beat-Flash Opacity (ZERO Layout Thrash!)
+                const stageScale = 1 + Math.max(0, appState.stageKickPos) * 0.042 + bassAmt * 0.012;
+                const stageY = -beatAmt * 3.2;
+                els.mainStage.style.transform = `translate3d(0, ${stageY.toFixed(2)}px, 0) scale(${stageScale.toFixed(4)})`;
+                els.stageBeatRim.style.opacity = Math.min(1, beatAmt * 0.65 + bassAmt * 0.22).toFixed(3);
+
+                const coverScale = 1 + beatAmt * 0.068 + bassAmt * 0.028;
+                els.coverDropZone.style.transform = `scale(${coverScale.toFixed(4)}) rotate(${appState.coverTilt.toFixed(2)}deg)`;
+                els.coverBeatRim.style.opacity = Math.min(1, beatAmt * 0.82 + metrics.snare * 0.35).toFixed(3);
+                els.coverGlassSheen.style.opacity = Math.min(1, 0.72 + highAmt * 0.28).toFixed(2);
+
+                const titleScale = 1 + beatAmt * 0.045;
+                els.titleDisplay.style.transform = `translate3d(0, ${(-beatAmt * 4.2).toFixed(2)}px, 0) scale(${titleScale.toFixed(4)})`;
+                els.btnPlayPause.style.transform = `scale(${(1 + beatAmt * 0.11).toFixed(4)})`;
+                els.livePulseOrb.style.transform = `scale(${(1 + beatAmt * 0.85).toFixed(3)})`;
+                els.coverHeartIcon.style.transform = `scale(${(1 + beatAmt * 0.55).toFixed(3)})`;
+
+                // 4. GPU-accelerated progress bar via scaleX (no width reflow!)
+                const cur = audioEngine.getCurrentTime();
+                const dur = audioEngine.getDuration();
+                const ratio = dur > 0 ? Math.min(1, cur / dur) : 0;
+                els.progressFill.style.transform = `scaleX(${ratio.toFixed(4)})`;
+
+                // 5. Throttled DOM text updates (only when changed / every 5 frames)
+                frameCounter++;
+                fpsFrames++;
+                if (nowMs - fpsLastTime >= 500) {
+                    const fps = Math.round((fpsFrames * 1000) / (nowMs - fpsLastTime));
+                    if (els.hudFps) els.hudFps.textContent = String(fps);
+                    fpsFrames = 0;
+                    fpsLastTime = nowMs;
+                }
+
+                if (frameCounter % 4 === 0) {
+                    const curStr = formatTime(cur);
+                    const durStr = formatTime(dur);
+                    if (curStr !== lastTimeText) { els.timeCurrent.textContent = curStr; lastTimeText = curStr; }
+                    if (durStr !== lastDurText) { els.timeDuration.textContent = durStr; lastDurText = durStr; }
+                    els.progressTrack.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
+
+                    const bassPct = Math.min(100, Math.round(metrics.bass * 125));
+                    const midPct = Math.min(100, Math.round(metrics.mid * 135));
+                    const highPct = Math.min(100, Math.round(metrics.high * 155));
+
+                    els.miniBarBass.style.height = `${Math.max(18, bassPct)}%`;
+                    els.miniBarMid.style.height = `${Math.max(18, midPct)}%`;
+                    els.miniBarHigh.style.height = `${Math.max(18, highPct)}%`;
+                    els.coverBatteryFill.style.width = `${Math.max(25, Math.min(100, 35 + metrics.energy * 105))}%`;
+
+                    const bpmLabel = audioEngine.isPlaying
+                        ? (metrics.bpm > 0 ? `${metrics.bpm}` : 'SYNC')
+                        : '---';
+                    els.hudBpm.textContent = bpmLabel;
+                    els.badgeBpm.textContent = audioEngine.isPlaying && metrics.bpm > 0 ? `${metrics.bpm} BPM` : (audioEngine.isPlaying ? 'ANALYZING' : 'PAUSED');
+                    els.badgeEnergy.textContent = audioEngine.isPlaying
+                        ? (metrics.beat > 0.35 ? 'KICK HIT!' : (metrics.snare > 0.38 ? 'SNARE!' : `LVL ${Math.round(metrics.energy * 100)}%`))
+                        : 'READY';
+                    els.hudIor.textContent = liveIOR.toFixed(2);
+                    els.beatStatusText.textContent = audioEngine.isPlaying
+                        ? `BEAT ${metrics.beatPhase + 1}/4`
+                        : 'PAUSED';
+
+                    els.monBass.textContent = `${bassPct}%`;
+                    els.monMid.textContent = `${midPct}%`;
+                    els.monHigh.textContent = `${highPct}%`;
+                    els.barMonBass.style.width = `${bassPct}%`;
+                    els.barMonMid.style.width = `${midPct}%`;
+                    els.barMonHigh.style.width = `${highPct}%`;
+                }
+
+                requestAnimationFrame(animate);
+            }
+
+            requestAnimationFrame(animate);
+        };
+    </script>
+</body>
+</html>
